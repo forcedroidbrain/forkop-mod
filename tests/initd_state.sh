@@ -79,6 +79,10 @@ if initd_ucode initd-should-ignore-config-change-reload on_config_change on_conf
 fi
 initd_ucode initd-should-ignore-config-change-reload on_config_change on_config_change 0 1 >/dev/null ||
   fail "stopped service should ignore config-change reload even when autostart is enabled"
+grep -Fq 'runtime_reload_candidate()' "$INITD_UC" ||
+  fail "config-change reload must still run when the previous core process is alive"
+grep -Fq 'sing-box-service-running' "$INITD_UC" ||
+  fail "config-change reload must notice a live sing-box process"
 initd_ucode initd-should-queue-config-change-reload on_config_change on_config_change 0 start >/dev/null ||
   fail "config-change reload during service start should be queued"
 if initd_ucode initd-should-queue-config-change-reload on_config_change on_config_change 0 "" >/dev/null 2>&1; then

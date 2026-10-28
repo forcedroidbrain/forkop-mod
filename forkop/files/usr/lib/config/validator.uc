@@ -774,6 +774,12 @@ function mwan3_has_enabled_interface() {
     return mwan3_has_enabled_interface_text(read_stdin());
 }
 
+function uci_core() {
+    if (uci_core_module == null)
+        uci_core_module = require("core.uci");
+    return uci_core_module;
+}
+
 function mwan3_has_enabled_interface_from_sections() {
     for (let section in uci_core().section_objects("mwan3", "interface"))
         if (option(section, "enabled", "0") == "1")
@@ -848,12 +854,6 @@ function runtime_constants() {
     if (constants_module == null)
         constants_module = require("core.constants");
     return constants_module;
-}
-
-function uci_core() {
-    if (uci_core_module == null)
-        uci_core_module = require("core.uci");
-    return uci_core_module;
 }
 
 function fixture_section_list(type_name) {
@@ -968,6 +968,19 @@ function validate_duration_option(value, label) {
     fail_validation("Invalid duration value for " + label + ": " + value + ". Use sing-box duration format like 1d, 12h or 30m. Aborted.");
 }
 
+function validate_dns_switch_failures(value) {
+    value = trim(as_string(value));
+    if (value == "")
+        value = "3";
+    if (match(value, /^[0-9]+$/) == null) {
+        fail_validation("DNS switch failures must be a whole number from 1 to 10. Aborted.");
+        return;
+    }
+    let count = int(value);
+    if (count < 1 || count > 10)
+        fail_validation("DNS switch failures must be a whole number from 1 to 10. Aborted.");
+}
+
 function validate_required_duration_option(value, label) {
     if (as_string(value) == "")
         fail_validation("Missing duration value for " + label + ". Use sing-box duration format like 1d, 12h or 30m. Aborted.");
@@ -1056,6 +1069,7 @@ function validate_dns_settings(settings, sections, context) {
         validate_required_duration_option(option(settings, "dns_check_interval", "10s"), "settings.dns_check_interval");
         validate_required_duration_option(option(settings, "dns_recovery_check_interval", "60s"), "settings.dns_recovery_check_interval");
         validate_required_duration_option(option(settings, "dns_check_timeout", "2s"), "settings.dns_check_timeout");
+        validate_dns_switch_failures(option(settings, "dns_switch_failures", "3"));
     }
 
     if (!bool_option(settings, "dns_detour_enabled", false))

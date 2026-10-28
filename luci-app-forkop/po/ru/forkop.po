@@ -566,8 +566,20 @@ msgstr "Фильтр по устройствам"
 msgid "Device or IP"
 msgstr "Устройство или IP"
 
-msgid "Devices and subnets in this list are fully excluded from Forkop: no tproxy mark, no FakeIP DNS, traffic goes as if Forkop were stopped."
-msgstr "Устройства и подсети из этого списка полностью исключаются из Forkop: без метки tproxy и без FakeIP DNS, трафик идёт так, будто Forkop выключен."
+msgid "Devices and subnets in this list are fully excluded from Forkop: no tproxy mark, traffic goes as if Forkop were stopped."
+msgstr "Устройства и подсети из этого списка полностью исключаются из Forkop: без метки tproxy, трафик идёт так, будто Forkop выключен."
+
+msgid "DNS for excluded devices"
+msgstr "DNS исключённых устройств"
+
+msgid "Provider: queries to the router use the DNS configured before Forkop, or the provider DNS from WAN. A DNS server set on the device itself is not intercepted. Engine: those queries go to Xray or sing-box and the answer is a real address, not FakeIP."
+msgstr "Провайдер: запросы к роутеру идут на DNS, который был настроен до Forkop, или на DNS провайдера с WAN. Свой DNS на устройстве не перехватывается. Движок: те же запросы идут в Xray или sing-box, и ответ — настоящий адрес, не FakeIP."
+
+msgid "Provider DNS"
+msgstr "DNS провайдера"
+
+msgid "Engine DNS"
+msgstr "DNS движка"
 
 msgid "DHCP has DNS server"
 msgstr "DHCP содержит DNS сервер"
@@ -605,11 +617,23 @@ msgstr "Отображаемое имя"
 msgid "Certificate name"
 msgstr "Имя сертификата"
 
+msgid "DNS server certificate name"
+msgstr "Имя сертификата DNS-сервера"
+
 msgid "Certificate name must be a domain, for example dns.example.net"
 msgstr "Имя сертификата должно быть доменом, например dns.example.net"
 
 msgid "DNS Check Interval"
 msgstr "Период проверки DNS"
+
+msgid "DNS switch failures"
+msgstr "Сбоев до переключения"
+
+msgid "How many checks in a row must fail before moving to the next DNS server. 1 switches on the first failure."
+msgstr "Сколько проверок подряд должны не ответить, прежде чем перейти к следующему DNS-серверу. 1 переключает с первой неудачи."
+
+msgid "Enter a whole number from 1 to 10"
+msgstr "Введите целое число от 1 до 10"
 
 msgid "DNS on router"
 msgstr "DNS на роутере"
@@ -664,6 +688,18 @@ msgstr "Стратегия DNS"
 
 msgid "DNS through proxy"
 msgstr "DNS через прокси"
+
+msgid "DNS answer"
+msgstr "Ответ DNS"
+
+msgid "Real address"
+msgstr "Настоящий адрес"
+
+msgid "Through sections below"
+msgstr "Через секции ниже"
+
+msgid "Real address: the device gets the address from this DNS, and the connection bypasses sections below. Through sections below: the device gets a fake address, sections below route the connection, and this DNS is used when the tunnel opens the site."
+msgstr "Настоящий адрес: устройство получает адрес от этого DNS, и соединение идёт мимо секций ниже. Через секции ниже: устройство получает поддельный адрес, секции ниже решают маршрут, а этот DNS используется, когда туннель открывает сайт."
 
 msgid "DNS through section"
 msgstr "DNS через секцию"
@@ -1058,8 +1094,14 @@ msgstr "Скрывать узлы каскадных подключений"
 msgid "Hide individual nodes that are already included in imported subscription URLTest groups"
 msgstr "Скрывать отдельные узлы, которые уже входят в импортированные URLTest группы подписки"
 
+msgid "Hide individual nodes that are already included in imported subscription URLTest groups."
+msgstr "Скрывать отдельные узлы, которые уже входят в импортированные URLTest-группы подписки."
+
 msgid "Hide intermediate nodes used as detours by other subscription nodes"
 msgstr "Скрывать промежуточные узлы, которые используются как detour для других узлов подписки"
+
+msgid "Hide intermediate nodes used as detours by other subscription nodes."
+msgstr "Скрывать промежуточные узлы, через которые каскадом идут другие узлы подписки."
 
 msgid "Hide selected servers."
 msgstr "Скрывать выбранные серверы."
@@ -1138,6 +1180,9 @@ msgstr "Добавлять URLTest группы из подписки"
 
 msgid "Import URLTest groups returned by this subscription provider"
 msgstr "Импортировать URLTest группы, если провайдер подписки возвращает их"
+
+msgid "Import URLTest groups returned by this subscription provider."
+msgstr "Импортировать URLTest-группы, которые возвращает провайдер этой подписки."
 
 msgid "Inbound JSON"
 msgstr "Inbound JSON"
@@ -1814,6 +1859,12 @@ msgstr "Протокол"
 msgid "Proxy core"
 msgstr "Ядро прокси"
 
+msgid "Post-quantum key, X25519MLKEM768"
+msgstr "Постквантовый ключ, X25519MLKEM768"
+
+msgid "Needed for REALITY servers on Xray 26.9 and newer: without it, sing-box extended cannot connect to them. On servers before Xray 25.5, turn this off or they stop answering."
+msgstr "Нужен серверам REALITY на Xray 26.9 и новее: без него sing-box extended к ним не подключается. На серверах до Xray 25.5 галочку снимите, иначе они перестанут отвечать."
+
 msgid "Same as routing engine"
 msgstr "Как в настройках"
 
@@ -2150,9 +2201,6 @@ msgstr "Не удалось переключить исходящее Xray"
 msgid "Check latency"
 msgstr "Проверить задержку"
 
-msgid "Forkop ping"
-msgstr "Пинг"
-
 msgid "Xray outbound restarted"
 msgstr "Исходящее Xray перезапущено"
 
@@ -2375,6 +2423,33 @@ msgstr "Hostname Tailscale"
 msgid "Test latency"
 msgstr "Тестирование задержки"
 
+msgid "Disable all"
+msgstr "Выключить все"
+
+msgid "Enable all"
+msgstr "Включить все"
+
+msgid "Hide not responding"
+msgstr "Скрыть не отвечающие"
+
+msgid "Show not responding"
+msgstr "Показать не отвечающие"
+
+msgid "Exclude"
+msgstr "Исключить"
+
+msgid "Excluded"
+msgstr "Исключённые"
+
+msgid "Restore"
+msgstr "Вернуть"
+
+msgid "Restore all"
+msgstr "Вернуть все"
+
+msgid "Failed to save the excluded server list"
+msgstr "Не удалось сохранить список исключённых серверов"
+
 msgid "Test only selected servers."
 msgstr "Тестировать только выбранные серверы."
 
@@ -2588,8 +2663,8 @@ msgstr "Исходящий"
 msgid "Uploaded"
 msgstr "Отдано"
 
-msgid "URL must start with vless://, vmess://, ss://, trojan://, socks4://, socks4a://, socks5://, hysteria2://, hy2://, wireguard://, wg://, awg://, or vpn://"
-msgstr "URL должен начинаться с vless://, vmess://, ss://, trojan://, socks4://, socks4a://, socks5://, hysteria2://, hy2://, wireguard://, wg://, awg:// или vpn://"
+msgid "URL must start with vless://, vmess://, ss://, trojan://, socks4://, socks4a://, socks5://, hysteria2://, hy2://, tuic://, wireguard://, wg://, awg://, or vpn://"
+msgstr "URL должен начинаться с vless://, vmess://, ss://, trojan://, socks4://, socks4a://, socks5://, hysteria2://, hy2://, tuic://, wireguard://, wg://, awg:// или vpn://"
 
 msgid "URL must start with vless://, vmess://, ss://, trojan://, socks4://, socks4a://, socks5://, hysteria2://, or hy2://"
 msgstr "URL должен начинаться с vless://, vmess://, ss://, trojan://, socks4://, socks4a://, socks5://, hysteria2:// или hy2://"
@@ -2711,6 +2786,12 @@ msgstr "Максимальный RTT least load"
 msgid "Least load tolerance"
 msgstr "Допуск least load"
 
+msgid "Least ping details"
+msgstr "Детали Least ping"
+
+msgid "Least load details"
+msgstr "Детали Least load"
+
 msgid "One server from another section, used when the rest are dead."
 msgstr "Один сервер из другой секции, если остальные не отвечают."
 
@@ -2806,6 +2887,15 @@ msgstr "VLESS flow"
 
 msgid "vless://, vmess://, ss://, trojan://, socks4/5://, hy2/hysteria2:// links"
 msgstr "ссылки vless://, vmess://, ss://, trojan://, socks4/5://, hy2/hysteria2://"
+
+msgid "vless://, vmess://, ss://, trojan://, socks4/5://, hy2/hysteria2://, tuic://, wg://, awg://, vpn:// links."
+msgstr "ссылки vless://, vmess://, ss://, trojan://, socks4/5://, hy2/hysteria2://, tuic://, wg://, awg://, vpn://"
+
+msgid "TUIC links work only in a sing-box section"
+msgstr "ссылки TUIC работают только в секции с движком sing-box"
+
+msgid "Invalid TUIC URL"
+msgstr "Некорректная ссылка TUIC"
 
 msgid "vless://, vmess://, ss://, trojan://, socks4/5://, hy2/hysteria2://, wg://, awg://, vpn:// links"
 msgstr "ссылки vless://, vmess://, ss://, trojan://, socks4/5://, hy2/hysteria2://, wg://, awg://, vpn://"

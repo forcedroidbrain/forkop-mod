@@ -123,6 +123,8 @@ function show_help() {
     print("    set_xray_group_proxy    Pin an Xray section to a specific outbound\n");
     print("    restart_xray_outbound <tag>\n");
     print("                            Turn one Xray outbound off or back on\n");
+    print("    set_xray_section_outbounds <section> <on|off>\n");
+    print("                            Turn every restartable outbound in one Xray section off or on\n");
     print("    xray_stopped_outbounds  List Xray outbounds turned off from the dashboard\n");
     print("    get_system_info         Get system information in JSON format\n");
     print("    get_server_capabilities Get server UI capabilities in JSON format\n");
@@ -183,6 +185,8 @@ function command_spec(command) {
         slot_status: [ "config/slots.uc", "status-json", 0 ],
         slot_save: [ "config/slots.uc", "save", 1 ],
         slot_apply: [ "config/slots.uc", "apply", 1 ],
+        exclusion_get: [ "config/exclusions.uc", "get", 0 ],
+        exclusion_set: [ "config/exclusions.uc", "set", 2 ],
         slot_configure: [ "config/slots.uc", "configure", 6 ],
         slot_probe: [ "config/slots.uc", "probe", 2 ],
         slot_probe_if_due: [ "config/slots.uc", "probe-if-due", 0 ],
@@ -221,6 +225,7 @@ function command_spec(command) {
         get_xray_nodes: [ "xray/runtime.uc", "nodes", 0 ],
         set_xray_group_proxy: [ "xray/runtime.uc", "select-outbound", 2 ],
         restart_xray_outbound: [ "xray/runtime.uc", "restart-outbound", 1 ],
+        set_xray_section_outbounds: [ "xray/runtime.uc", "set-section-outbounds", 2 ],
         xray_stopped_outbounds: [ "xray/runtime.uc", "stopped-outbounds", 0 ],
         xray_close_connection: [ "xray/runtime.uc", "close-connection", 1 ],
         xray_close_all_connections: [ "xray/runtime.uc", "close-all-connections", 0 ],

@@ -290,6 +290,18 @@ msgstr "Стратегия ByeDPI"
 msgid "ByeDPI strategy cannot be empty"
 msgstr "Стратегия ByeDPI не может быть пустой"
 
+msgid "sing-box config file"
+msgstr "Конфиг sing-box"
+
+msgid "Path of the sing-box config. A section can still run on sing-box when Xray is the main engine, so this path stays available. Change it ONLY if you know what you are doing."
+msgstr "Путь к конфигу sing-box. Секция может работать на sing-box и при основном Xray, поэтому путь остаётся доступен. Меняйте его, только если знаете, что делаете."
+
+msgid "sing-box cache file"
+msgstr "Кэш sing-box"
+
+msgid "Path of the sing-box cache. A section can still run on sing-box when Xray is the main engine, so this path stays available. Xray does not use this file. Change it ONLY if you know what you are doing."
+msgstr "Путь к кэшу sing-box. Секция может работать на sing-box и при основном Xray, поэтому путь остаётся доступен. Xray этот файл не использует. Меняйте его, только если знаете, что делаете."
+
 msgid "Cache File Path"
 msgstr "Путь к файлу кэша"
 
@@ -554,8 +566,20 @@ msgstr "Фильтр по устройствам"
 msgid "Device or IP"
 msgstr "Устройство или IP"
 
-msgid "Devices and subnets in this list are fully excluded from Forkop: no tproxy mark, no FakeIP DNS, traffic goes as if Forkop were stopped."
-msgstr "Устройства и подсети из этого списка полностью исключаются из Forkop: без метки tproxy и без FakeIP DNS, трафик идёт так, будто Forkop выключен."
+msgid "Devices and subnets in this list are fully excluded from Forkop: no tproxy mark, traffic goes as if Forkop were stopped."
+msgstr "Устройства и подсети из этого списка полностью исключаются из Forkop: без метки tproxy, трафик идёт так, будто Forkop выключен."
+
+msgid "DNS for excluded devices"
+msgstr "DNS исключённых устройств"
+
+msgid "Provider: queries to the router use the DNS configured before Forkop, or the provider DNS from WAN. A DNS server set on the device itself is not intercepted. Engine: those queries go to Xray or sing-box and the answer is a real address, not FakeIP."
+msgstr "Провайдер: запросы к роутеру идут на DNS, который был настроен до Forkop, или на DNS провайдера с WAN. Свой DNS на устройстве не перехватывается. Движок: те же запросы идут в Xray или sing-box, и ответ — настоящий адрес, не FakeIP."
+
+msgid "Provider DNS"
+msgstr "DNS провайдера"
+
+msgid "Engine DNS"
+msgstr "DNS движка"
 
 msgid "DHCP has DNS server"
 msgstr "DHCP содержит DNS сервер"
@@ -593,11 +617,23 @@ msgstr "Отображаемое имя"
 msgid "Certificate name"
 msgstr "Имя сертификата"
 
+msgid "DNS server certificate name"
+msgstr "Имя сертификата DNS-сервера"
+
 msgid "Certificate name must be a domain, for example dns.example.net"
 msgstr "Имя сертификата должно быть доменом, например dns.example.net"
 
 msgid "DNS Check Interval"
 msgstr "Период проверки DNS"
+
+msgid "DNS switch failures"
+msgstr "Сбоев до переключения"
+
+msgid "How many checks in a row must fail before moving to the next DNS server. 1 switches on the first failure."
+msgstr "Сколько проверок подряд должны не ответить, прежде чем перейти к следующему DNS-серверу. 1 переключает с первой неудачи."
+
+msgid "Enter a whole number from 1 to 10"
+msgstr "Введите целое число от 1 до 10"
 
 msgid "DNS on router"
 msgstr "DNS на роутере"
@@ -610,6 +646,9 @@ msgstr "DNS через HTTPS (DoH)"
 
 msgid "DNS over QUIC (DoQ)"
 msgstr "DNS через QUIC (DoQ)"
+
+msgid "DoQ does not go through a section. Xray dials it directly from the router."
+msgstr "DoQ не идёт через секцию. Xray набирает его напрямую с роутера."
 
 msgid "DNS over TLS (DoT)"
 msgstr "DNS через TLS (DoT)"
@@ -649,6 +688,18 @@ msgstr "Стратегия DNS"
 
 msgid "DNS through proxy"
 msgstr "DNS через прокси"
+
+msgid "DNS answer"
+msgstr "Ответ DNS"
+
+msgid "Real address"
+msgstr "Настоящий адрес"
+
+msgid "Through sections below"
+msgstr "Через секции ниже"
+
+msgid "Real address: the device gets the address from this DNS, and the connection bypasses sections below. Through sections below: the device gets a fake address, sections below route the connection, and this DNS is used when the tunnel opens the site."
+msgstr "Настоящий адрес: устройство получает адрес от этого DNS, и соединение идёт мимо секций ниже. Через секции ниже: устройство получает поддельный адрес, секции ниже решают маршрут, а этот DNS используется, когда туннель открывает сайт."
 
 msgid "DNS through section"
 msgstr "DNS через секцию"
@@ -1043,8 +1094,14 @@ msgstr "Скрывать узлы каскадных подключений"
 msgid "Hide individual nodes that are already included in imported subscription URLTest groups"
 msgstr "Скрывать отдельные узлы, которые уже входят в импортированные URLTest группы подписки"
 
+msgid "Hide individual nodes that are already included in imported subscription URLTest groups."
+msgstr "Скрывать отдельные узлы, которые уже входят в импортированные URLTest-группы подписки."
+
 msgid "Hide intermediate nodes used as detours by other subscription nodes"
 msgstr "Скрывать промежуточные узлы, которые используются как detour для других узлов подписки"
+
+msgid "Hide intermediate nodes used as detours by other subscription nodes."
+msgstr "Скрывать промежуточные узлы, через которые каскадом идут другие узлы подписки."
 
 msgid "Hide selected servers."
 msgstr "Скрывать выбранные серверы."
@@ -1123,6 +1180,9 @@ msgstr "Добавлять URLTest группы из подписки"
 
 msgid "Import URLTest groups returned by this subscription provider"
 msgstr "Импортировать URLTest группы, если провайдер подписки возвращает их"
+
+msgid "Import URLTest groups returned by this subscription provider."
+msgstr "Импортировать URLTest-группы, которые возвращает провайдер этой подписки."
 
 msgid "Inbound JSON"
 msgstr "Inbound JSON"
@@ -1799,6 +1859,12 @@ msgstr "Протокол"
 msgid "Proxy core"
 msgstr "Ядро прокси"
 
+msgid "Post-quantum key, X25519MLKEM768"
+msgstr "Постквантовый ключ, X25519MLKEM768"
+
+msgid "Needed for REALITY servers on Xray 26.9 and newer: without it, sing-box extended cannot connect to them. On servers before Xray 25.5, turn this off or they stop answering."
+msgstr "Нужен серверам REALITY на Xray 26.9 и новее: без него sing-box extended к ним не подключается. На серверах до Xray 25.5 галочку снимите, иначе они перестанут отвечать."
+
 msgid "Same as routing engine"
 msgstr "Как в настройках"
 
@@ -2114,6 +2180,33 @@ msgstr "Списки сервисов"
 msgid "Services info"
 msgstr "Информация о сервисах"
 
+msgid "Restart Xray outbound"
+msgstr "Перезапустить исходящее Xray"
+
+msgid "Xray on"
+msgstr "Вкл"
+
+msgid "Xray off"
+msgstr "Выкл"
+
+msgid "Turn off Xray outbound"
+msgstr "Выключить исходящее Xray"
+
+msgid "Turn on Xray outbound"
+msgstr "Включить исходящее Xray"
+
+msgid "Failed to switch Xray outbound"
+msgstr "Не удалось переключить исходящее Xray"
+
+msgid "Check latency"
+msgstr "Проверить задержку"
+
+msgid "Xray outbound restarted"
+msgstr "Исходящее Xray перезапущено"
+
+msgid "Failed to restart Xray outbound"
+msgstr "Не удалось перезапустить исходящее Xray"
+
 msgid "Settings"
 msgstr "Настройки"
 
@@ -2330,6 +2423,33 @@ msgstr "Hostname Tailscale"
 msgid "Test latency"
 msgstr "Тестирование задержки"
 
+msgid "Disable all"
+msgstr "Выключить все"
+
+msgid "Enable all"
+msgstr "Включить все"
+
+msgid "Hide not responding"
+msgstr "Скрыть не отвечающие"
+
+msgid "Show not responding"
+msgstr "Показать не отвечающие"
+
+msgid "Exclude"
+msgstr "Исключить"
+
+msgid "Excluded"
+msgstr "Исключённые"
+
+msgid "Restore"
+msgstr "Вернуть"
+
+msgid "Restore all"
+msgstr "Вернуть все"
+
+msgid "Failed to save the excluded server list"
+msgstr "Не удалось сохранить список исключённых серверов"
+
 msgid "Test only selected servers."
 msgstr "Тестировать только выбранные серверы."
 
@@ -2543,8 +2663,11 @@ msgstr "Исходящий"
 msgid "Uploaded"
 msgstr "Отдано"
 
-msgid "URL must start with vless://, vmess://, ss://, trojan://, socks4://, socks4a://, socks5://, hysteria2://, hy2://, wireguard://, wg://, awg://, or vpn://"
-msgstr "URL должен начинаться с vless://, vmess://, ss://, trojan://, socks4://, socks4a://, socks5://, hysteria2://, hy2://, wireguard://, wg://, awg:// или vpn://"
+msgid "URL must start with vless://, vmess://, ss://, trojan://, socks4://, socks4a://, socks5://, hysteria2://, hy2://, tuic://, wireguard://, wg://, awg://, or vpn://"
+msgstr "URL должен начинаться с vless://, vmess://, ss://, trojan://, socks4://, socks4a://, socks5://, hysteria2://, hy2://, tuic://, wireguard://, wg://, awg:// или vpn://"
+
+msgid "URL must start with vless://, vmess://, ss://, trojan://, socks4://, socks4a://, socks5://, hysteria2://, or hy2://"
+msgstr "URL должен начинаться с vless://, vmess://, ss://, trojan://, socks4://, socks4a://, socks5://, hysteria2:// или hy2://"
 
 msgid "URL must use one of the following protocols:"
 msgstr "URL должен использовать один из следующих протоколов:"
@@ -2663,6 +2786,12 @@ msgstr "Максимальный RTT least load"
 msgid "Least load tolerance"
 msgstr "Допуск least load"
 
+msgid "Least ping details"
+msgstr "Детали Least ping"
+
+msgid "Least load details"
+msgstr "Детали Least load"
+
 msgid "One server from another section, used when the rest are dead."
 msgstr "Один сервер из другой секции, если остальные не отвечают."
 
@@ -2755,6 +2884,18 @@ msgstr "Видимое имя этой секции"
 
 msgid "VLESS flow"
 msgstr "VLESS flow"
+
+msgid "vless://, vmess://, ss://, trojan://, socks4/5://, hy2/hysteria2:// links"
+msgstr "ссылки vless://, vmess://, ss://, trojan://, socks4/5://, hy2/hysteria2://"
+
+msgid "vless://, vmess://, ss://, trojan://, socks4/5://, hy2/hysteria2://, tuic://, wg://, awg://, vpn:// links."
+msgstr "ссылки vless://, vmess://, ss://, trojan://, socks4/5://, hy2/hysteria2://, tuic://, wg://, awg://, vpn://"
+
+msgid "TUIC links work only in a sing-box section"
+msgstr "ссылки TUIC работают только в секции с движком sing-box"
+
+msgid "Invalid TUIC URL"
+msgstr "Некорректная ссылка TUIC"
 
 msgid "vless://, vmess://, ss://, trojan://, socks4/5://, hy2/hysteria2://, wg://, awg://, vpn:// links"
 msgstr "ссылки vless://, vmess://, ss://, trojan://, socks4/5://, hy2/hysteria2://, wg://, awg://, vpn://"
@@ -3103,3 +3244,538 @@ msgstr "Применить"
 
 msgid "Failed to start ciadpi"
 msgstr "Не удалось запустить ciadpi"
+
+msgid "Checked %d domains"
+msgstr "Проверено %d доменов"
+
+msgid "This is an old result, %d domains"
+msgstr "Это старый результат, %d доменов"
+
+msgid "The domain list is incomplete. Reload the page and try again."
+msgstr "Список доменов собрался не целиком. Обновите страницу и попробуйте ещё раз."
+
+msgid "OpenConnect server"
+msgstr "Сервер OpenConnect"
+
+msgid "HTTPS address of the OpenConnect server. Available only on sing-box 1.14 or newer."
+msgstr "HTTPS-адрес сервера OpenConnect. Доступно только на sing-box 1.14 и новее."
+
+msgid "OpenConnect protocol"
+msgstr "Протокол OpenConnect"
+
+msgid "Which VPN dialect the server speaks"
+msgstr "Какой тип VPN говорит сервер"
+
+msgid "Auth group"
+msgstr "Группа авторизации"
+
+msgid "Skip certificate check"
+msgstr "Не проверять сертификат"
+
+msgid "+ Add OpenConnect"
+msgstr "+ Добавить OpenConnect"
+
+msgid "OpenConnect"
+msgstr "OpenConnect"
+
+msgid "Add one or more OpenConnect clients. Available only on sing-box 1.14 or newer."
+msgstr "Добавьте один или несколько клиентов OpenConnect. Доступно только на sing-box 1.14 и новее."
+
+msgid "Name shown for this client"
+msgstr "Имя этого клиента"
+
+msgid "HTTPS address of the OpenConnect server"
+msgstr "HTTPS-адрес сервера OpenConnect"
+
+msgid "Enter the server address"
+msgstr "Введите адрес сервера"
+
+msgid "Use a different name for each OpenConnect client"
+msgstr "Дайте каждому клиенту OpenConnect своё имя"
+
+msgid "Server certificate SHA hash"
+msgstr "Сертификат SHA hash VPN-сервера"
+
+msgid "SHA hash of the VPN server certificate. The same value as OpenConnect --servercert. A sha256: prefix is also accepted."
+msgstr "SHA-хеш сертификата VPN-сервера. То же значение, что OpenConnect --servercert. Префикс sha256: тоже подходит."
+
+msgid "Enter a SHA hash of the server certificate"
+msgstr "Введите SHA-хеш сертификата сервера"
+
+msgid "Additional"
+msgstr "Дополнительно"
+
+msgid "Client certificate, session cookie, server name, UDP, IPv6, MTU, connection check, keepalive, compression and on demand."
+msgstr "Клиентский сертификат, cookie сессии, имя для сертификата, UDP, IPv6, MTU, проверка связи, keepalive, сжатие и подключение по требованию."
+
+msgid "Connection check interval"
+msgstr "Интервал проверки связи"
+
+msgid "How often the tunnel is checked. Leave empty to use the server value. Example: 30s."
+msgstr "Как часто проверять туннель. Пустое значение оставляет интервал сервера. Пример: 30s."
+
+msgid "Reconnect timeout"
+msgstr "Таймаут переподключения"
+
+msgid "How long reconnection attempts may continue after the tunnel drops. Example: 300s."
+msgstr "Сколько продолжать попытки переподключения после обрыва туннеля. Пример: 300s."
+
+msgid "Keepalive"
+msgstr "Keepalive"
+
+msgid "Send TCP keepalive on the connection to the VPN server."
+msgstr "Отправлять TCP keepalive на соединении с VPN-сервером."
+
+msgid "Disable compression"
+msgstr "Отключить сжатие"
+
+msgid "Do not negotiate AnyConnect compression."
+msgstr "Не согласовывать сжатие AnyConnect."
+
+msgid "On demand"
+msgstr "По требованию"
+
+msgid "Disconnect the tunnel when it is idle and bring it back when traffic needs it."
+msgstr "Разрывать туннель, когда он не нужен, и поднимать снова, когда появляется трафик."
+
+msgid "Port"
+msgstr "Порт"
+
+msgid "OpenVPN"
+msgstr "OpenVPN"
+
+msgid "Add one or more OpenVPN clients. Available only on sing-box 1.14 or newer."
+msgstr "Добавьте один или несколько клиентов OpenVPN. Доступно только на sing-box 1.14 и новее."
+
+msgid "+ Add OpenVPN"
+msgstr "+ Добавить OpenVPN"
+
+msgid "Setup"
+msgstr "Способ настройки"
+
+msgid "Paste a config file or fill the connection fields yourself."
+msgstr "Вставьте файл конфигурации или заполните поля вручную."
+
+msgid "Config file"
+msgstr "Файл конфигурации"
+
+msgid "Manual"
+msgstr "Вручную"
+
+msgid "OpenVPN config"
+msgstr "Конфигурация OpenVPN"
+
+msgid "Paste the contents of the .ovpn file, or choose the file."
+msgstr "Вставьте содержимое файла .ovpn или выберите файл."
+
+msgid "or choose a .ovpn file"
+msgstr "или выберите файл .ovpn"
+
+msgid "The config must contain a remote server or a static key"
+msgstr "В конфигурации должен быть сервер remote или статический ключ"
+
+msgid "Paste an OpenVPN config or choose a file"
+msgstr "Вставьте конфигурацию OpenVPN или выберите файл"
+
+msgid "How often OpenVPN checks the tunnel. Empty uses the value from the config. Example: 30s."
+msgstr "Как часто OpenVPN проверяет туннель. Пустое значение берёт интервал из конфигурации. Пример: 30s."
+
+msgid "Reply timeout"
+msgstr "Таймаут ответа"
+
+msgid "How long to wait for a reply before OpenVPN drops the tunnel. Empty uses the value from the config. Example: 180s."
+msgstr "Сколько ждать ответ, прежде чем OpenVPN разорвёт туннель. Пустое значение берёт паузу из конфигурации. Пример: 180s."
+
+msgid "OpenVPN server address"
+msgstr "Адрес сервера OpenVPN"
+
+msgid "Used when the server asks for a login. Overrides a login inside the config file."
+msgstr "Если сервер запрашивает логин. Заменяет логин из файла конфигурации."
+
+msgid "CA certificate"
+msgstr "Сертификат CA"
+
+msgid "PEM certificate of the VPN server."
+msgstr "PEM-сертификат VPN-сервера."
+
+msgid "PEM certificate. Leave empty if the server uses only a username and password."
+msgstr "Сертификат PEM. Оставьте пустым, если серверу достаточно логина и пароля."
+
+msgid "TLS key, ciphers, certificate name, MTU and on demand."
+msgstr "Ключ TLS, шифры, имя сертификата, MTU и подключение по требованию."
+
+msgid "TLS control key"
+msgstr "Ключ канала TLS"
+
+msgid "tls-auth or tls-crypt key, if the server uses one."
+msgstr "Ключ tls-auth или tls-crypt, если сервер его использует."
+
+msgid "Control key"
+msgstr "Ключ"
+
+msgid "Contents of the tls-auth or tls-crypt key."
+msgstr "Содержимое ключа tls-auth или tls-crypt."
+
+msgid "Key direction"
+msgstr "Направление ключа"
+
+msgid "Data ciphers"
+msgstr "Шифры данных"
+
+msgid "Cipher list separated by colons. Example: AES-256-GCM:AES-128-GCM"
+msgstr "Список шифров через двоеточие. Пример: AES-256-GCM:AES-128-GCM"
+
+msgid "Auth digest"
+msgstr "Контрольная сумма"
+
+msgid "Name expected in the server certificate."
+msgstr "Имя, которое должно быть в сертификате сервера."
+
+msgid "From the config line cipher or data-ciphers. Example: AES-256-GCM:AES-128-GCM or AES-256-CBC"
+msgstr "Строка cipher или data-ciphers из файла. Пример: AES-256-GCM:AES-128-GCM или AES-256-CBC"
+
+msgid "From the config line auth, for example SHA256. Leave empty for the default."
+msgstr "Строка auth из файла, например SHA256. Пустое значение оставляет стандарт."
+
+msgid "Allow compression"
+msgstr "Разрешить сжатие"
+
+msgid "Enable if the config has comp-lzo or compress. Otherwise the server may refuse the tunnel."
+msgstr "Включите, если в файле есть comp-lzo или compress. Иначе сервер может не поднять туннель."
+
+msgid "Could not read the OpenVPN file"
+msgstr "Не удалось прочитать файл OpenVPN"
+
+msgid "Use a different name for each OpenVPN client"
+msgstr "У каждого клиента OpenVPN должно быть своё имя"
+
+msgid "Client certificate"
+msgstr "Клиентский сертификат"
+
+msgid "PEM certificate. Both the certificate and the key are required."
+msgstr "Сертификат в формате PEM. Нужны и сертификат, и ключ."
+
+msgid "Paste a PEM certificate"
+msgstr "Вставьте сертификат PEM"
+
+msgid "Client private key"
+msgstr "Закрытый ключ клиента"
+
+msgid "PEM private key that matches the certificate."
+msgstr "Закрытый ключ PEM от этого сертификата."
+
+msgid "Paste a PEM private key"
+msgstr "Вставьте закрытый ключ PEM"
+
+msgid "Key password"
+msgstr "Пароль ключа"
+
+msgid "Only if the private key is encrypted. Leave empty otherwise."
+msgstr "Только если ключ зашифрован. Иначе оставьте пустым."
+
+msgid "Session cookie"
+msgstr "Cookie сессии"
+
+msgid "Obtain cookie automatically"
+msgstr "Получать куку автоматически"
+
+msgid "When enabled, the session cookie is obtained automatically. The openconnect package is required. When disabled, no cookie is used and sing-box logs in with the username and password. For a cascade this matters: a server that needs a cookie will not connect unless this is enabled."
+msgstr "Если включено, кука получается сама, нужен пакет openconnect. Если выключено, куки нет: sing-box входит логином и паролем. Для каскада это важно: сервер, которому нужна кука, без этой галочки не подключится."
+
+msgid "Cookie from a browser login, when a password is not accepted."
+msgstr "Cookie из входа через браузер, если пароль сервер не принимает."
+
+msgid "Name on the certificate when the server field is an IP address."
+msgstr "Имя в сертификате, если в поле сервера указан IP-адрес."
+
+msgid "Disable UDP"
+msgstr "Отключить UDP"
+
+msgid "Use only TCP. Turn this on when UDP through the tunnel does not work."
+msgstr "Только TCP. Включите, если UDP через туннель не работает."
+
+msgid "Disable IPv6"
+msgstr "Отключить IPv6"
+
+msgid "Do not request an IPv6 address inside the tunnel."
+msgstr "Не запрашивать IPv6-адрес внутри туннеля."
+
+msgid "MTU"
+msgstr "MTU"
+
+msgid "Packet size inside the tunnel. Leave empty for the default."
+msgstr "Размер пакета внутри туннеля. Пустое поле — значение по умолчанию."
+
+msgid "Enter a number"
+msgstr "Введите число"
+
+msgid "Enter an MTU from 576 to 65535"
+msgstr "Введите MTU от 576 до 65535"
+
+msgid "WARP WIREGUARD"
+msgstr "WARP WIREGUARD"
+
+msgid "+ Add WARP WIREGUARD"
+msgstr "+ Добавить WARP WIREGUARD"
+
+msgid "Cloudflare WARP over WireGuard. The row shows the name. Open it for the license, port, and buttons. If a cascade is enabled in this section, it is used for registration."
+msgstr "Cloudflare WARP через WireGuard. В строке только имя. Откройте её для ключа, порта и кнопок. Если в секции включён каскад, он используется для регистрации."
+
+msgid "WARP MASQUE"
+msgstr "WARP MASQUE"
+
+msgid "+ Add WARP MASQUE"
+msgstr "+ Добавить WARP MASQUE"
+
+msgid "Cloudflare WARP over MASQUE for sing-box-extended. The core registers the device itself and stores it in the cache. If the cache file is in RAM, the device is created again after a router reboot, after the cache is deleted, or after a sing-box version change. This is a limitation of sing-box-extended. A WARP+ key is optional."
+msgstr "Cloudflare WARP через MASQUE для sing-box-extended. Ядро само регистрирует устройство и хранит его в кэше. Если файл кэша лежит в оперативной памяти, устройство создаётся заново после перезагрузки роутера, удаления кэша или смены версии sing-box. Это ограничение sing-box-extended. Ключ WARP+ необязателен."
+
+msgid "Optional. sing-box-extended sends this key when it registers the device."
+msgstr "Необязательно. sing-box-extended передаёт этот ключ, когда регистрирует устройство."
+
+msgid "Optional. sing-box-extended sends this key when it registers the device. Account type and quota stay unknown: the core registers MASQUE itself."
+msgstr "Необязательно. sing-box-extended передаёт этот ключ, когда регистрирует устройство. Тип учётной записи и квота неизвестны: устройство регистрирует само ядро."
+
+msgid "UDP port of the Cloudflare server. 443 is the usual one and keeps the address chosen by Cloudflare. Another port uses 162.159.198.1, because otherwise the core stays on 443."
+msgstr "UDP-порт сервера Cloudflare. Обычно это 443, и тогда остаётся адрес, который выбрал Cloudflare. Другой порт использует 162.159.198.1, иначе ядро останется на 443."
+
+msgid "Handshake timeout, seconds"
+msgstr "Таймаут рукопожатия, секунды"
+
+msgid "Enter seconds, from 1 to 300. Leave empty for no such limit. QUIC still drops the handshake after 5 seconds without a single packet. Needs sing-box-extended 2.7.3. On an older core the option is saved but not written into the config."
+msgstr "Введите секунды, от 1 до 300. Пусто — без этого предела. Если 5 секунд нет ни одного пакета, QUIC обрывает рукопожатие сам. Нужен sing-box-extended 2.7.3. На более старом ядре опция сохранится, но в конфиг не попадёт."
+
+msgid "TCP only (L4)"
+msgstr "Только TCP (L4)"
+
+msgid "Faster mode for websites over TCP. Client UDP does not go through this profile: QUIC, games and DNS through the tunnel stay on another server in the section. The path to Cloudflare is still UDP. Needs sing-box-extended 2.7.3. On an older core the option is saved but not written into the config."
+msgstr "Быстрее для сайтов по TCP. UDP клиентов через этот профиль не идёт: QUIC, игры и DNS через туннель останутся на другом сервере секции. Путь до Cloudflare по-прежнему UDP. Нужен sing-box-extended 2.7.3. На более старом ядре опция сохранится, но в конфиг не попадёт."
+
+msgid "Enter a number from 1 to 300, or leave empty"
+msgstr "Введите число от 1 до 300 или оставьте пустым"
+
+msgid "empty"
+msgstr "пусто"
+
+msgid "Do not connect to the WARP MASQUE server over IPv6."
+msgstr "Не подключаться к серверу WARP MASQUE по IPv6."
+
+msgid "Use a different name for each WARP MASQUE profile"
+msgstr "У каждого профиля WARP MASQUE должно быть своё имя"
+
+msgid "WARP"
+msgstr "WARP"
+
+msgid "MASQUE"
+msgstr "MASQUE"
+
+msgid "+ Add MASQUE"
+msgstr "+ Добавить MASQUE"
+
+msgid "Cloudflare WARP over MASQUE on sing-box-extended, or a MASQUE server on ordinary sing-box 1.15. Extended registers the device itself. Ordinary sing-box 1.15 needs a server and port. A WARP+ key is optional and is used only by extended."
+msgstr "Cloudflare WARP через MASQUE на sing-box-extended или сервер MASQUE на обычном sing-box 1.15. Extended сам регистрирует устройство. Обычному sing-box 1.15 нужны сервер и порт. Ключ WARP+ необязателен и используется только extended."
+
+msgid "Optional. sing-box-extended sends this key when it registers the MASQUE device. Ordinary sing-box 1.15 ignores it."
+msgstr "Необязательно. sing-box-extended передаёт этот ключ при регистрации устройства MASQUE. Обычный sing-box 1.15 его не использует."
+
+msgid "Enter a server and port for sing-box 1.15"
+msgstr "Для sing-box 1.15 укажите сервер и порт"
+
+msgid "Not sent to sing-box-extended. That core enrolls a new MASQUE key on start, and a saved token makes Cloudflare answer 401."
+msgstr "В sing-box-extended не передаётся. Это ядро само записывает ключ MASQUE при запуске, а сохранённый токен Cloudflare отклоняет с ошибкой 401."
+
+msgid "Not sent to sing-box-extended. Kept only for ordinary sing-box, which does not use it either."
+msgstr "В sing-box-extended не передаётся. Обычный sing-box тоже его не использует."
+
+msgid "Optional. Applied to this device. sing-box-extended also receives it as the MASQUE license key."
+msgstr "Необязательно. Применяется к этому устройству. sing-box-extended также получает его как ключ лицензии MASQUE."
+
+msgid "Get MASQUE"
+msgstr "Получить MASQUE"
+
+msgid "MASQUE profile is ready. Save this window, then save the section."
+msgstr "Профиль MASQUE готов. Сохраните это окно, затем сохраните секцию."
+
+msgid "MASQUE address replaced. Save this window, then save the section."
+msgstr "Адрес MASQUE заменён. Сохраните это окно, затем сохраните секцию."
+
+msgid "New MASQUE profile is ready, but the old device could not be removed."
+msgstr "Новый профиль MASQUE готов, но старое устройство удалить не удалось."
+
+msgid "Removed from the profile. Cloudflare still has this device."
+msgstr "Убрано из профиля. У Cloudflare это устройство остаётся."
+
+msgid "Cloudflare profile for sing-box-extended. Leave empty on ordinary sing-box 1.15, which uses the server below."
+msgstr "Профиль Cloudflare для sing-box-extended. На обычном sing-box 1.15 оставьте пустым: там используется сервер ниже."
+
+msgid "Token of the extended MASQUE device. Not used by ordinary sing-box."
+msgstr "Токен устройства MASQUE для extended. Обычный sing-box его не использует."
+
+msgid "Address for ordinary sing-box 1.15 masque-client. sing-box-extended ignores it and uses the address from its own registration."
+msgstr "Адрес для обычного sing-box 1.15, тип masque-client. sing-box-extended его не использует и берёт адрес из своей регистрации."
+
+msgid "Server port"
+msgstr "Порт сервера"
+
+msgid "TCP/UDP port of the MASQUE server. 443 is the usual one."
+msgstr "Порт сервера MASQUE. Обычно это 443."
+
+msgid "TLS server name"
+msgstr "Имя сервера TLS"
+
+msgid "SNI. Leave empty to use the server address."
+msgstr "SNI. Пустое поле берёт адрес сервера."
+
+msgid "Enter a device id and token for extended, or a server and port for sing-box 1.15"
+msgstr "Для extended введите id устройства и токен, для sing-box 1.15 — сервер и порт"
+
+msgid "Device id"
+msgstr "Id устройства"
+
+msgid "Cloudflare MASQUE profile id. Required. An empty id would make sing-box-extended register a new device on every start."
+msgstr "Id профиля Cloudflare MASQUE. Обязательно. Пустой id заставит sing-box-extended регистрировать новое устройство при каждом запуске."
+
+msgid "Enter the device id"
+msgstr "Введите id устройства"
+
+msgid "Access token"
+msgstr "Токен доступа"
+
+msgid "Token of this MASQUE device. Stored with the profile and sent again on the next start."
+msgstr "Токен этого устройства MASQUE. Хранится в профиле и подставляется при следующем запуске."
+
+msgid "Enter the access token"
+msgstr "Введите токен доступа"
+
+msgid "Optional. Passed to sing-box-extended as the MASQUE license key."
+msgstr "Необязательно. Передаётся в sing-box-extended как ключ лицензии MASQUE."
+
+msgid "Do not connect to the MASQUE server over IPv6."
+msgstr "Не подключаться к серверу MASQUE по IPv6."
+
+msgid "Enter the MASQUE device id and token before saving"
+msgstr "Перед сохранением введите id устройства MASQUE и токен"
+
+msgid "Use a different name for each MASQUE profile"
+msgstr "Дайте каждому профилю MASQUE своё имя"
+
+msgid "Enter a name"
+msgstr "Введите имя"
+
+msgid "+ Add WARP"
+msgstr "+ Добавить WARP"
+
+msgid "Cloudflare WARP profiles. The row shows the name. Open it for the license, port, and buttons. If a cascade is enabled in this section, it is used for registration."
+msgstr "Профили Cloudflare WARP. В строке только имя. Откройте её для ключа, порта и кнопок. Если в секции включён каскад, он используется для регистрации."
+
+msgid "WARP+ license"
+msgstr "Ключ WARP+"
+
+msgid "Optional. Applied to this device without changing its address."
+msgstr "Необязательно. Применяется к этому устройству, адрес при этом не меняется."
+
+msgid "Endpoint port"
+msgstr "Порт сервера"
+
+msgid "UDP port of the Cloudflare server. 2408 is the usual one."
+msgstr "UDP-порт сервера Cloudflare. Обычно это 2408."
+
+msgid "Do not add the IPv6 address to the tunnel."
+msgstr "Не добавлять IPv6-адрес в туннель."
+
+msgid "Get WARP"
+msgstr "Получить WARP"
+
+msgid "Apply key"
+msgstr "Применить ключ"
+
+msgid "New address"
+msgstr "Новый адрес"
+
+msgid "Delete device"
+msgstr "Удалить устройство"
+
+msgid "Not registered"
+msgstr "Не зарегистрирован"
+
+msgid "WARP+"
+msgstr "WARP+"
+
+msgid "Free"
+msgstr "Бесплатный"
+
+msgid "Quota"
+msgstr "Квота"
+
+msgid "Actions"
+msgstr "Действия"
+
+msgid "Name is required"
+msgstr "Укажите имя"
+
+msgid "No device token. New address registers this profile again."
+msgstr "Нет токена устройства. «Новый адрес» регистрирует этот профиль заново."
+
+msgid "Could not register WARP"
+msgstr "Не удалось зарегистрировать WARP"
+
+msgid "Get WARP before saving"
+msgstr "Сначала получите WARP"
+
+msgid "This profile already exists. Use New address."
+msgstr "Этот профиль уже есть. Используйте «Новый адрес»."
+
+msgid "WARP registered. Save this window, then save the section."
+msgstr "WARP зарегистрирован. Сохраните это окно, затем секцию."
+
+msgid "This profile has no device token. Use New address once."
+msgstr "У этого профиля нет токена устройства. Один раз нажмите «Новый адрес»."
+
+msgid "Enter a WARP+ license"
+msgstr "Введите ключ WARP+"
+
+msgid "WARP+ license was rejected"
+msgstr "Ключ WARP+ не принят"
+
+msgid "License applied. Save this window, then save the section."
+msgstr "Ключ применён. Сохраните это окно, затем секцию."
+
+msgid "WARP address replaced. Save this window, then save the section."
+msgstr "Адрес WARP заменён. Сохраните это окно, затем секцию."
+
+msgid "New WARP profile is ready, but the old device could not be removed."
+msgstr "Новый профиль WARP готов, но старое устройство удалить не удалось."
+
+msgid "Removed from the list. Cloudflare still has this device."
+msgstr "Убрано из списка. В Cloudflare это устройство осталось."
+
+msgid "WARP device removed. Save the section."
+msgstr "Устройство WARP удалено. Сохраните секцию."
+
+msgid "Could not delete the WARP device"
+msgstr "Не удалось удалить устройство WARP"
+
+msgid "Use a different name for each WARP profile"
+msgstr "У каждого профиля WARP должно быть своё имя"
+
+msgid "Free account"
+msgstr "Бесплатный"
+
+msgid "Limited account"
+msgstr "Ограниченный"
+
+msgid "Unlimited account"
+msgstr "Безлимитный"
+
+msgid "Team account"
+msgstr "Командный"
+
+msgid "Check account"
+msgstr "Проверить"
+
+msgid "Account status updated. Save this window, then save the section."
+msgstr "Статус обновлён. Сохраните это окно, затем секцию."
+
+msgid "Could not check the WARP account"
+msgstr "Не удалось проверить аккаунт WARP"
+

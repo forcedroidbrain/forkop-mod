@@ -551,9 +551,11 @@ function reload_sing_box_runtime(previous_pid, config_hash_before, config_hash_a
     }
 
     previous_pid = sing_box_reload_previous_pid(previous_pid, config_hash_before, config_hash_after);
-    command_success_from_args([ "logger", "-t", "forkop", "[info] Reloading sing-box runtime" ]);
-    if (!command_success_from_args([ "/etc/init.d/sing-box", "reload" ])) {
-        command_success_from_args([ "logger", "-t", "forkop", "[fatal] Failed to reload sing-box. Aborted." ]);
+    command_success_from_args([ "logger", "-t", "forkop", "[info] Restarting sing-box runtime" ]);
+    // procd reload keeps the old process when the command line did not change.
+    // A new WARP MASQUE outbound is then missing until a full Forkop restart.
+    if (!command_success_from_args([ "/etc/init.d/sing-box", "restart" ])) {
+        command_success_from_args([ "logger", "-t", "forkop", "[fatal] Failed to restart sing-box. Aborted." ]);
         exit(1);
     }
 
@@ -992,6 +994,9 @@ function nft_runtime_signature_body(settings, sections) {
     body = signature_add_value(body, "settings.exclude_ntp", bool_option(settings, "exclude_ntp", false) ? "1" : "0");
     body = signature_add_value(body, "settings.exclude_bittorrent", bool_option(settings, "exclude_bittorrent", false) ? "1" : "0");
     body = signature_add_value(body, "settings.routing_excluded_ips", option(settings, "routing_excluded_ips", ""));
+    body = signature_add_value(body, "settings.routing_excluded_dns", option(settings, "routing_excluded_dns", "provider"));
+    let engine_name = lc(option(settings, "routing_engine", ""));
+    body = signature_add_value(body, "settings.routing_engine", (engine_name == "xray" || engine_name == "xray-core") ? "xray" : "sing-box");
 
     for (let section in sections) {
         section = object_or_empty(section);
@@ -1458,8 +1463,10 @@ function append_sing_box_rule_signature_body(body, section, sections, settings) 
 
     if (connections.is_connections_action(action)) {
         body = signature_add_value(body, prefix + ".proxy_core", signature_proxy_core(section, settings));
+        body = signature_add_value(body, prefix + ".reality_new_xray", bool_option_value(section, "reality_new_xray", false));
         body = signature_add_value(body, prefix + ".connection_urls", connection_urls_signature(section));
         body = signature_add_value(body, prefix + ".subscription_urls", subscription_urls_signature(section));
+        body = signature_add_value(body, prefix + ".subscription_excluded", connections.outbound_excluded_signature(section));
         body = signature_add_value(body, prefix + ".interfaces", interfaces_signature(section));
         body = signature_add_value(body, prefix + ".openconnect", openconnect_signature(section));
         body = signature_add_value(body, prefix + ".openvpn", openvpn_signature(section));
@@ -1527,6 +1534,7 @@ function append_sing_box_rule_signature_body(body, section, sections, settings) 
         body = signature_add_value(body, prefix + ".dns_type", option(section, "dns_type", "udp"));
         body = signature_add_value(body, prefix + ".dns_server", option(section, "dns_server", ""));
         body = signature_add_value(body, prefix + ".dns_server_name", option(section, "dns_server_name", ""));
+        body = signature_add_value(body, prefix + ".dns_answer", lc(option(section, "dns_answer", "real")) == "route" ? "route" : "real");
         body = signature_add_value(body, prefix + ".dns_detour_enabled", bool_option_value(section, "dns_detour_enabled", false));
         if (bool_option(section, "dns_detour_enabled", false))
             body = signature_add_value(body, prefix + ".dns_detour_section", option(section, "dns_detour_section", ""));
@@ -1637,6 +1645,7 @@ function sing_box_signature_body(settings, sections, servers, mwan3_active) {
     let body = "";
 
     body = signature_add_value(body, "settings.routing_engine", signature_routing_engine(settings));
+    body = signature_add_value(body, "settings.routing_excluded_dns", option(settings, "routing_excluded_dns", "provider"));
     body = signature_add_value(body, "settings.dns_type", option(settings, "dns_type", "doh"));
     body = signature_add_value(body, "settings.dns_certificate_name", option(settings, "dns_certificate_name", ""));
     body = signature_add_value(body, "settings.dns_strategy", option(settings, "dns_strategy", "prefer_ipv4"));
@@ -1647,6 +1656,7 @@ function sing_box_signature_body(settings, sections, servers, mwan3_active) {
     body = signature_add_value(body, "settings.dns_check_interval", option(settings, "dns_check_interval", "10s"));
     body = signature_add_value(body, "settings.dns_recovery_check_interval", option(settings, "dns_recovery_check_interval", "60s"));
     body = signature_add_value(body, "settings.dns_check_timeout", option(settings, "dns_check_timeout", "2s"));
+    body = signature_add_value(body, "settings.dns_switch_failures", option(settings, "dns_switch_failures", "3"));
     let dns_detour_enabled = bool_option_value(settings, "dns_detour_enabled", false);
     body = signature_add_value(body, "settings.dns_detour_enabled", dns_detour_enabled);
     if (dns_detour_enabled == "1")

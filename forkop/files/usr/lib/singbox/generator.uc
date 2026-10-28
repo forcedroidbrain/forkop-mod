@@ -423,6 +423,44 @@ function sing_box_masque_l4_supported() {
     return v.patch >= 3;
 }
 
+function sing_box_reality_mlkem_supported() {
+    let v = sing_box_extended_revision();
+    if (v == null)
+        return false;
+    if (v.major != 2)
+        return v.major > 2;
+    if (v.minor != 7)
+        return v.minor > 7;
+    return v.patch >= 2;
+}
+
+function section_reality_mlkem_enabled(section) {
+    return sing_box_reality_mlkem_supported() && bool_option(section, "reality_new_xray", false);
+}
+
+function apply_reality_mlkem(outbound, section) {
+    if (type(outbound) != "object" || type(outbound.tls) != "object")
+        return;
+    let reality = outbound.tls.reality;
+    if (type(reality) != "object" || reality.enabled === false)
+        return;
+    let enabled = section_reality_mlkem_enabled(section);
+    if (!enabled && reality.support_x25519mlkem768 == null)
+        return;
+    let tls = {};
+    for (let key, value in outbound.tls)
+        tls[key] = value;
+    let next = {};
+    for (let key, value in reality)
+        next[key] = value;
+    if (enabled)
+        next.support_x25519mlkem768 = true;
+    else
+        delete next.support_x25519mlkem768;
+    tls.reality = next;
+    outbound.tls = tls;
+}
+
 const RULESET_HTTP_CLIENT_TAG = "ruleset-http";
 
 function usable_http_client_detour(detour) {
@@ -736,7 +774,7 @@ function supported_subscription_outbound(outbound) {
     if (t == "direct" || t == "selector" || t == "urltest" || t == "dns" || t == "block")
         return false;
     return t == "vless" || t == "vmess" || t == "trojan" || t == "shadowsocks" ||
-        t == "socks" || t == "hysteria2";
+        t == "socks" || t == "hysteria2" || t == "tuic";
 }
 
 function outbound_uses_xhttp(outbound) {
@@ -835,7 +873,7 @@ function copy_subscription_outbound(outbound, new_tag) {
             key != "__forkop_hidden" && key != "__forkop_allow_group")
             copy[key] = value;
     }
-    if (as_string(copy.type || "") == "hysteria2" &&
+    if ((as_string(copy.type || "") == "hysteria2" || as_string(copy.type || "") == "tuic") &&
         type(copy.tls) == "object" &&
         copy.tls.utls != null) {
         let tls = {};
@@ -1005,6 +1043,8 @@ function add_subscription_source_with_state(config, section, source_index, sourc
             display_name = node_prefix + " " + display_name;
             base = display_name;
         }
+        if (!subscription_group_outbound(outbound) && connections.subscription_name_excluded(section, display_name))
+            continue;
         let new_tag = unique_tag(base, taken);
         taken[new_tag] = true;
         tag_map[base] = new_tag;
@@ -1013,6 +1053,7 @@ function add_subscription_source_with_state(config, section, source_index, sourc
         if (as_string(outbound.remark || "") != "")
             tag_map[as_string(outbound.remark)] = new_tag;
         push(prepared, copy_subscription_outbound(outbound, new_tag));
+        apply_reality_mlkem(prepared[length(prepared) - 1], section);
         push(display_names, display_name);
         let source_link = as_string(outbound.share_link || "");
         if (!subscription_share_link.is_copyable_link(source_link))
@@ -2232,6 +2273,48 @@ function manual_hysteria2_outbound(link, tag_name) {
     if (as_string(query.downmbps || "") != "")
         outbound.down_mbps = int(query.downmbps, 10);
     apply_link_tls(outbound, url_scheme(link), query);
+    return outbound;
+}
+
+function manual_tuic_outbound(link, tag_name) {
+    let query = url_query_params(link);
+    let host = url_host(link);
+    let port = parse_port(url_port(link));
+    let userinfo = url_userinfo(link);
+    let colon = index(userinfo, ":");
+    let uuid = colon > 0 ? substr(userinfo, 0, colon) : "";
+    let password = colon > 0 ? substr(userinfo, colon + 1) : "";
+    if (host == "" || port == null || uuid == "")
+        runtime_generate_unsupported("manual TUIC proxy link is invalid");
+
+    let tls = { enabled: true, alpn: [ "h3" ] };
+    if (as_string(query.sni || "") != "")
+        tls.server_name = as_string(query.sni);
+    if (bool_query(query.allowInsecure || query.insecure || query.allow_insecure || ""))
+        tls.insecure = true;
+    let alpn = csv_array(query.alpn);
+    if (length(alpn) > 0)
+        tls.alpn = alpn;
+
+    let outbound = {
+        type: "tuic",
+        tag: tag_name,
+        server: host,
+        server_port: port,
+        uuid: uuid,
+        password: password,
+        tls: tls
+    };
+    let congestion = lc(as_string(query.congestion_control || ""));
+    if (congestion == "cubic" || congestion == "new_reno" || congestion == "bbr")
+        outbound.congestion_control = congestion;
+    let relay = lc(as_string(query.udp_relay_mode || ""));
+    if (relay == "native" || relay == "quic")
+        outbound.udp_relay_mode = relay;
+    if (bool_query(query.udp_over_stream || ""))
+        outbound.udp_over_stream = true;
+    if (bool_query(query.zero_rtt_handshake || query.reduce_rtt || ""))
+        outbound.zero_rtt_handshake = true;
     return outbound;
 }
 
@@ -3467,6 +3550,8 @@ function manual_link_outbound(link, tag_name) {
         return manual_trojan_outbound(link, tag_name);
     if (scheme == "hysteria2" || scheme == "hy2")
         return manual_hysteria2_outbound(link, tag_name);
+    if (scheme == "tuic")
+        return manual_tuic_outbound(link, tag_name);
     runtime_generate_unsupported("manual proxy link scheme is not supported by sing-box config generation yet");
 }
 function connection_item_tag(section_name, kind, item_index) {
@@ -3495,6 +3580,9 @@ function add_connection_subscriptions(config, state, section, taken, selector_ta
 }
 
 function add_interface_connection_outbound(config, state, section, interface_index, interface_name, taken, selector_tags, urltest_candidate_tags) {
+    let exclude_key = "iface:" + as_string(interface_name);
+    if (connections.outbound_key_excluded(section, exclude_key))
+        return;
     let section_name = section[".name"];
     let tag_name = connection_item_tag(section_name, "interface", interface_index);
     if (taken[tag_name])
@@ -3528,6 +3616,7 @@ function add_interface_connection_outbound(config, state, section, interface_ind
     push(config.outbounds, outbound);
     push(selector_tags, tag_name);
     push(urltest_candidate_tags, tag_name);
+    runtime_subscription.remember_exclude_key(state, tag_name, exclude_key);
     runtime_subscription.remember_outbound_metadata(state, tag_name, interface_name, outbound);
 }
 
@@ -4001,6 +4090,9 @@ function add_openconnect_connection(config, state, section, taken, selector_tags
 
     let index = 0;
     for (let client in connections.openconnect_clients(section)) {
+        let exclude_key = "openconnect:" + as_string(client[".name"] || "");
+        if (connections.outbound_key_excluded(section, exclude_key))
+            continue;
         index++;
         let server = trim(option(client, "server", ""));
         if (server == "")
@@ -4159,6 +4251,7 @@ function add_openconnect_connection(config, state, section, taken, selector_tags
         push(config.endpoints, endpoint);
         push(selector_tags, tag_name);
         push(urltest_candidate_tags, tag_name);
+        runtime_subscription.remember_exclude_key(state, tag_name, exclude_key);
         runtime_subscription.remember_outbound_metadata(state, tag_name, label, { type: "OpenConnect" });
         let probe_port = int(config.__oc_probe_next || 0);
         if (probe_port < 4700)
@@ -4705,6 +4798,8 @@ function openvpn_apply_detour(config, section, taken, endpoint, label) {
 
 
 function add_manual_proxy_link(config, state, section, manual_index, link, taken, selector_tags, urltest_candidate_tags) {
+    if (connections.outbound_key_excluded(section, "link:" + as_string(link)))
+        return "";
     let section_name = section[".name"];
     let tag_name = outbound_tag(section_name + "-" + manual_index);
     if (taken[tag_name])
@@ -4733,6 +4828,7 @@ function add_manual_proxy_link(config, state, section, manual_index, link, taken
         push(selector_tags, tag_name);
         push(urltest_candidate_tags, tag_name);
         state.links[tag_name] = as_string(link);
+        runtime_subscription.remember_exclude_key(state, tag_name, "link:" + as_string(link));
         runtime_subscription.remember_outbound_metadata(state, tag_name, display_name, {
             type: protocol_name
         });
@@ -4741,11 +4837,13 @@ function add_manual_proxy_link(config, state, section, manual_index, link, taken
 
     let outbound = manual_link_outbound(link, tag_name);
     ensure_explicit_outbound_supported(outbound, "manual outbound", display_name);
+    apply_reality_mlkem(outbound, section);
     push(config.outbounds, outbound);
     push(selector_tags, tag_name);
     push(urltest_candidate_tags, tag_name);
 
     state.links[tag_name] = as_string(link);
+    runtime_subscription.remember_exclude_key(state, tag_name, "link:" + as_string(link));
     runtime_subscription.remember_outbound_metadata(state, tag_name, display_name, outbound);
     return tag_name;
 }
@@ -4803,6 +4901,9 @@ function add_warp_profiles(config, state, section, taken, selector_tags, urltest
     let extended = sing_box_is_extended();
     let n = 0;
     for (let client in connections.warp_clients(section)) {
+        let exclude_key = "warp:" + as_string(client[".name"] || "");
+        if (connections.outbound_key_excluded(section, exclude_key))
+            continue;
         n++;
         let private_key = trim(option(client, "private_key", ""));
         let public_key = trim(option(client, "public_key", ""));
@@ -4861,6 +4962,7 @@ function add_warp_profiles(config, state, section, taken, selector_tags, urltest
         push(config.endpoints, endpoint);
         push(selector_tags, tag_name);
         push(urltest_candidate_tags, tag_name);
+        runtime_subscription.remember_exclude_key(state, tag_name, exclude_key);
         runtime_subscription.remember_outbound_metadata(state, tag_name, label, { type: "WARP WIREGUARD" });
     }
 }
@@ -4876,6 +4978,9 @@ function add_masque_profiles(config, state, section, taken, selector_tags, urlte
     }
     let n = 0;
     for (let client in clients) {
+        let exclude_key = "masque:" + as_string(client[".name"] || "");
+        if (connections.outbound_key_excluded(section, exclude_key))
+            continue;
         n++;
         let label = trim(option(client, "name", ""));
         if (label == "")
@@ -4930,6 +5035,7 @@ function add_masque_profiles(config, state, section, taken, selector_tags, urlte
         push(config.outbounds, endpoint);
         push(selector_tags, tag_name);
         push(urltest_candidate_tags, tag_name);
+        runtime_subscription.remember_exclude_key(state, tag_name, exclude_key);
         runtime_subscription.remember_outbound_metadata(state, tag_name, label, { type: "WARP MASQUE" });
     }
 }
@@ -4967,6 +5073,9 @@ function add_openvpn_connection(config, state, section, taken, selector_tags, ur
         return;
     let index = 0;
     for (let client in connections.openvpn_clients(section)) {
+        let exclude_key = "openvpn:" + as_string(client[".name"] || "");
+        if (connections.outbound_key_excluded(section, exclude_key))
+            continue;
         index++;
         let label = trim(option(client, "name", ""));
         if (label == "")
@@ -4985,6 +5094,7 @@ function add_openvpn_connection(config, state, section, taken, selector_tags, ur
         push(config.endpoints, endpoint);
         push(selector_tags, tag_name);
         push(urltest_candidate_tags, tag_name);
+        runtime_subscription.remember_exclude_key(state, tag_name, exclude_key);
         runtime_subscription.remember_outbound_metadata(state, tag_name, label, { type: "OpenVPN" });
         openvpn_add_probe(config, tag_name);
     }
@@ -5032,6 +5142,9 @@ function prepare_json_connection_outbounds(section, taken) {
     let legacy_tags = [];
 
     for (let i = 0; i < length(items); i++) {
+        let exclude_key = connections.json_exclude_key(items[i]);
+        if (connections.outbound_key_excluded(section, exclude_key))
+            continue;
         let outbound = parse_outbound_json(items[i]);
         if (outbound == null)
             runtime_generate_unsupported("JSON outbound is invalid");
@@ -5050,7 +5163,8 @@ function prepare_json_connection_outbounds(section, taken) {
         push(outbounds, outbound);
         push(prepared, {
             outbound,
-            displayName: display_name != "" ? display_name : "JSON outbound " + (i + 1)
+            displayName: display_name != "" ? display_name : "JSON outbound " + (i + 1),
+            excludeKey: exclude_key
         });
     }
 
@@ -5065,11 +5179,13 @@ function prepare_json_connection_outbounds(section, taken) {
 function add_connection_json_outbounds(config, state, section, taken, selector_tags, urltest_candidate_tags) {
     for (let item in prepare_json_connection_outbounds(section, taken)) {
         let outbound = item.outbound;
+        apply_reality_mlkem(outbound, section);
         let tag_name = outbound.tag;
         push(config.outbounds, outbound);
         push(selector_tags, tag_name);
         if (urltest_leaf_candidate_outbound(outbound))
             push(urltest_candidate_tags, tag_name);
+        runtime_subscription.remember_exclude_key(state, tag_name, item.excludeKey);
         runtime_subscription.remember_outbound_metadata(state, tag_name, item.displayName, outbound);
         runtime_subscription.remember_urltest_group(state, tag_name, item.displayName, outbound);
     }
@@ -5167,6 +5283,8 @@ function xray_clash_type(protocol, kind) {
         return "Shadowsocks";
     if (proto == "hysteria" || proto == "hysteria2" || proto == "hy2")
         return "Hysteria2";
+    if (proto == "tuic")
+        return "TUIC";
     if (proto == "socks")
         return "SOCKS";
     if (proto == "freedom" || proto == "direct")
@@ -5232,10 +5350,19 @@ function add_xray_sidecar_outbound(config, section, taken) {
             display_name,
             { type: xray_clash_type(node.protocol, node.kind) }
         );
-        if (as_string(node.kind || "proxy") != "iface" && link_index < length(links)) {
+        let copied = as_string(node.link || "");
+        if (copied != "")
+            state.links[tag] = copied;
+        else if (as_string(node.source || "") != "subscription" &&
+            as_string(node.kind || "proxy") != "iface" &&
+            link_index < length(links)) {
             state.links[tag] = as_string(links[link_index]);
             link_index++;
         }
+        if (as_string(node.source || "") == "subscription")
+            push(state.subscriptionTags, tag);
+        if (as_string(node.excludeKey || "") != "")
+            state.excludeKeys[tag] = as_string(node.excludeKey);
     }
 
     push(config.outbounds, {
@@ -5272,8 +5399,13 @@ function add_connections_outbound(config, section, taken) {
     add_openvpn_connection(config, state, section, taken, selector_tags, urltest_candidate_tags);
     add_connection_json_outbounds(config, state, section, taken, selector_tags, urltest_candidate_tags);
 
-    if (length(selector_tags) == 0)
-        runtime_generate_unsupported("connection section has no usable outbounds");
+    if (length(selector_tags) == 0) {
+        if (connections.outbound_excluded_signature(section) == "")
+            runtime_generate_unsupported("connection section has no usable outbounds");
+        let tag_name = outbound_tag(section_name);
+        push(config.outbounds, { type: "block", tag: tag_name });
+        push(selector_tags, tag_name);
+    }
 
     if (section_needs_country_is(section)) {
         let previous_state = read_json_file(runtime_subscription.section_cache_path(section_name));
@@ -5788,6 +5920,8 @@ function apply_source_exclusions(rule, excluded) {
             wrapped.server = source.server;
         if (source.rewrite_ttl != null)
             wrapped.rewrite_ttl = source.rewrite_ttl;
+        if (source.disable_cache != null)
+            wrapped.disable_cache = source.disable_cache;
         return wrapped;
     }
     catch (e) {
@@ -5810,6 +5944,14 @@ function prepend_all(list, items) {
     for (let value in array_or_empty(list))
         push(result, value);
     return result;
+}
+
+function single_or_array(values) {
+    return length(values) == 1 ? values[0] : values;
+}
+
+function excluded_dns_uses_engine() {
+    return lc(option(runtime_settings(), "routing_excluded_dns", "provider")) == "engine";
 }
 
 function dns_server_tag_exists(config, tag_name) {
@@ -5855,9 +5997,6 @@ function excluded_non_fakeip_rule(inbound, source) {
         disable_cache: true
     };
 }
-function single_or_array(values) {
-    return length(values) == 1 ? values[0] : values;
-}
 
 function add_global_routing_exclusions(config) {
     let excluded = [];
@@ -5871,47 +6010,30 @@ function add_global_routing_exclusions(config) {
     if (length(excluded) == 0)
         return;
 
-    // When Xray owns TPROXY/DNS, excluded LAN clients never hit the sidecar.
-    // The DNS-exclusion rules reference SOURCE_DNS inbound that does not exist.
+    // Xray owns TPROXY. Excluded clients reach it only through the DNS redirect.
     if (engine.is_xray_primary())
         return;
 
     try {
-        if (type(config.dns) != "object")
-            config.dns = {};
-        if (type(config.dns.rules) != "array")
-            config.dns.rules = [];
-
-        ensure_excluded_dns_servers(config);
-
-        let inbound = source_dns_inbound_matcher();
         let source = single_or_array(excluded);
-        let fakeip_proof = [
-            {
-                action: "evaluate",
-                server: runtime_constants.BOOTSTRAP_DNS_SERVER_TAG,
-                inbound,
-                source_ip_cidr: source,
-                disable_cache: true
-            },
-            excluded_non_fakeip_rule(inbound, source),
-            {
-                action: "route",
-                server: runtime_constants.EXCLUDED_DNS_SERVER_TAG,
-                inbound,
-                source_ip_cidr: source,
-                disable_cache: true
-            },
-            {
-                action: "route",
-                server: runtime_constants.EXCLUDED_DNS_HTTPS_TAG,
-                inbound,
-                source_ip_cidr: source,
-                disable_cache: true
-            }
-        ];
-        if (!sing_box_at_least_1_14()) {
-            fakeip_proof = [
+        if (excluded_dns_uses_engine()) {
+            if (type(config.dns) != "object")
+                config.dns = {};
+            if (type(config.dns.rules) != "array")
+                config.dns.rules = [];
+
+            ensure_excluded_dns_servers(config);
+
+            let inbound = source_dns_inbound_matcher();
+            let fakeip_proof = [
+                {
+                    action: "evaluate",
+                    server: runtime_constants.BOOTSTRAP_DNS_SERVER_TAG,
+                    inbound,
+                    source_ip_cidr: source,
+                    disable_cache: true
+                },
+                excluded_non_fakeip_rule(inbound, source),
                 {
                     action: "route",
                     server: runtime_constants.EXCLUDED_DNS_SERVER_TAG,
@@ -5927,14 +6049,32 @@ function add_global_routing_exclusions(config) {
                     disable_cache: true
                 }
             ];
+            if (!sing_box_at_least_1_14()) {
+                fakeip_proof = [
+                    {
+                        action: "route",
+                        server: runtime_constants.EXCLUDED_DNS_SERVER_TAG,
+                        inbound,
+                        source_ip_cidr: source,
+                        disable_cache: true
+                    },
+                    {
+                        action: "route",
+                        server: runtime_constants.EXCLUDED_DNS_HTTPS_TAG,
+                        inbound,
+                        source_ip_cidr: source,
+                        disable_cache: true
+                    }
+                ];
+            }
+            config.dns.rules = prepend_all(config.dns.rules, fakeip_proof);
         }
-        config.dns.rules = prepend_all(config.dns.rules, fakeip_proof);
 
         insert_route_rules_after_system(config, [{
             action: "route",
             outbound: runtime_constants.BYPASS_OUTBOUND_TAG,
             inbound: tproxy_inbound_matcher(),
-            source_ip_cidr: single_or_array(excluded)
+            source_ip_cidr: source
         }]);
     }
     catch (e) {
@@ -6102,11 +6242,13 @@ function source_aware_dns_sources(sections) {
     let seen = {};
     let values = [];
 
+    let engine_dns = excluded_dns_uses_engine();
     for (let value in settings_routing_excluded_ips()) {
         value = trim(as_string(value));
         if (value != "" && !seen[value]) {
             seen[value] = true;
-            push(values, value);
+            if (engine_dns)
+                push(values, value);
         }
     }
 
@@ -6155,6 +6297,106 @@ function add_source_aware_dns_fallback(config, source_ip_cidr) {
     };
     add_source_dns_matchers(rule, source_ip_cidr);
     push_dns_matcher_rule(config, rule);
+}
+
+function dns_answer_is_route(section) {
+    return lc(option(section, "dns_answer", "real")) == "route";
+}
+
+function copy_dns_rule(rule) {
+    let copy = {};
+    for (let key, value in rule)
+        copy[key] = value;
+    return copy;
+}
+
+let routed_dns_owner = {};
+
+function reset_routed_dns_owners() {
+    routed_dns_owner = {};
+}
+
+function dns_matcher_source(rule) {
+    if (type(rule) == "object" && as_string(rule.type) == "logical" && type(rule.rules) == "array") {
+        for (let item in rule.rules) {
+            if (type(item) == "object" && item.invert !== true)
+                return item;
+        }
+    }
+    return rule;
+}
+
+function remember_routed_dns_owner(rule, server) {
+    for (let key in [ "domain", "domain_suffix", "domain_keyword", "domain_regex" ]) {
+        let values = rule[key];
+        if (values == null)
+            continue;
+        if (type(values) != "array")
+            values = [ values ];
+        for (let value in values) {
+            let id = key + ":" + as_string(value);
+            if (routed_dns_owner[id] == null)
+                routed_dns_owner[id] = server;
+        }
+    }
+}
+
+function covering_routed_dns_server(rule) {
+    if (type(rule) != "object" || rule.rule_set != null)
+        return "";
+    let server = "";
+    let found = false;
+    for (let key in [ "domain", "domain_suffix", "domain_keyword", "domain_regex" ]) {
+        let values = rule[key];
+        if (values == null)
+            continue;
+        if (type(values) != "array")
+            values = [ values ];
+        for (let value in values) {
+            found = true;
+            let owner = routed_dns_owner[key + ":" + as_string(value)];
+            if (owner == null || owner == "")
+                return "";
+            if (server == "")
+                server = owner;
+            else if (server != owner)
+                return "";
+        }
+    }
+    return found ? server : "";
+}
+
+function push_dns_route_resolve(config, section, dns_rule) {
+    if (!dns_answer_is_route(section) || engine.is_xray_primary())
+        return;
+    let source = dns_matcher_source(dns_rule);
+    let server = dns_action_server_tag(section[".name"]);
+    let rule = {
+        action: "resolve",
+        server,
+        disable_cache: true
+    };
+    for (let key in [ "domain", "domain_suffix", "domain_keyword", "domain_regex", "rule_set", "source_ip_cidr" ]) {
+        if (source[key] != null)
+            rule[key] = source[key];
+    }
+    if (rule.domain == null && rule.domain_suffix == null && rule.domain_keyword == null &&
+        rule.domain_regex == null && rule.rule_set == null)
+        return;
+    remember_routed_dns_owner(rule, server);
+    push(config.route.rules, apply_source_exclusions(rule, section_excluded_source_ips(section)));
+}
+
+function push_dns_action_answer(config, section, dns_rule, rewrite_ttl) {
+    if (dns_answer_is_route(section) && !engine.is_xray_primary()) {
+        let client_rule = copy_dns_rule(dns_rule);
+        client_rule.action = "route";
+        client_rule.server = runtime_constants.FAKEIP_DNS_SERVER_TAG;
+        client_rule.rewrite_ttl = rewrite_ttl;
+        push_dns_matcher_rule(config, client_rule);
+        push_dns_route_resolve(config, section, dns_rule);
+    }
+    push_dns_matcher_rule(config, dns_rule);
 }
 
 function dns_action_server_tag(section_name) {
@@ -6226,6 +6468,15 @@ function add_dns_action_rules_for_section(config, section) {
             rewrite_ttl
         };
         add_source_dns_matchers(dns_rule, fully_routed_ips);
+        if (dns_answer_is_route(section) && !engine.is_xray_primary()) {
+            dns_rule.server = runtime_constants.FAKEIP_DNS_SERVER_TAG;
+            push(config.route.rules, apply_source_exclusions({
+                action: "resolve",
+                server: server_tag,
+                disable_cache: true,
+                source_ip_cidr: single_or_array(fully_routed_ips)
+            }, excluded));
+        }
         push_dns_matcher_rule(config, apply_source_exclusions(dns_rule, excluded));
     }
     if (has_inline_domains) {
@@ -6239,7 +6490,7 @@ function add_dns_action_rules_for_section(config, section) {
         add_domain_array(dns_rule, "domain_keyword", domain_keyword);
         add_domain_array(dns_rule, "domain_regex", domain_regex);
         add_source_dns_matchers(dns_rule, source_ip_cidr);
-        push_dns_matcher_rule(config, apply_source_exclusions(dns_rule, excluded));
+        push_dns_action_answer(config, section, apply_source_exclusions(dns_rule, excluded), rewrite_ttl);
     }
     if (length(rule_set_tags) > 0) {
         let dns_rule = {
@@ -6249,7 +6500,7 @@ function add_dns_action_rules_for_section(config, section) {
             rule_set: single_or_array(rule_set_tags)
         };
         add_source_dns_matchers(dns_rule, source_ip_cidr);
-        push_dns_matcher_rule(config, apply_source_exclusions(dns_rule, excluded));
+        push_dns_action_answer(config, section, apply_source_exclusions(dns_rule, excluded), rewrite_ttl);
     }
     if (!has_inline_domains && length(rule_set_tags) == 0 && length(fully_routed_ips) == 0)
         runtime_generate_unsupported("DNS action '" + section_name + "' has no domain matchers");
@@ -6418,8 +6669,12 @@ function add_combined_route_for_section(config, section) {
         let resolve = runtime_route.resolve_rule_for_section(section, route_rule);
         if (type(resolve) == "object" && resolve.warning)
             warn(resolve.warning, "\n");
-        else if (type(resolve) == "object" && resolve.rule)
+        else if (type(resolve) == "object" && resolve.rule) {
+            let owned = covering_routed_dns_server(route_rule);
+            if (owned != "")
+                resolve.rule.server = owned;
             push(config.route.rules, apply_source_exclusions(resolve.rule, excluded));
+        }
         push(config.route.rules, apply_source_exclusions(route_rule, excluded));
     }
 
@@ -6697,6 +6952,7 @@ function generate_config(output_path, service_address, mwan3_active, supports_xh
     let settings = runtime_settings_cache;
 
     let sections = enabled_sections(deferred_sections);
+    reset_routed_dns_owners();
     let servers = engine.is_xray_primary() ? [] : enabled_servers();
     if (length(sections) == 0 && length(servers) == 0 && trim(as_string(deferred_sections)) == "")
         runtime_generate_unsupported("no enabled sections");

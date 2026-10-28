@@ -999,6 +999,32 @@ function validateWarpUrl(url) {
   }
   return { valid: true, message: "Valid" };
 }
+function validateTuicUrl(url) {
+  const text = `${url || ""}`.trim();
+  if (!/^tuic:\/\//i.test(text)) {
+    return { valid: false, message: _("Invalid TUIC URL") };
+  }
+  if (/\s/.test(text)) {
+    return { valid: false, message: _("Invalid TUIC URL") };
+  }
+  const body = text.replace(/^tuic:\/\//i, "").split("#")[0];
+  const mainPart = body.split("?")[0];
+  const at = mainPart.lastIndexOf("@");
+  if (at <= 0) {
+    return { valid: false, message: _("Invalid TUIC URL") };
+  }
+  const userinfo = decodeURIComponent(mainPart.slice(0, at));
+  const colon = userinfo.indexOf(":");
+  if (colon <= 0 || !userinfo.slice(0, colon)) {
+    return { valid: false, message: _("Invalid TUIC URL") };
+  }
+  const hostPort = mainPart.slice(at + 1);
+  const parsed = parseHostPort(hostPort);
+  if (!parsed || !parsed.host || !parsed.port || !/^[0-9]+$/.test(`${parsed.port}`.replace("/", "")) || Number(`${parsed.port}`.replace("/", "")) < 1 || Number(`${parsed.port}`.replace("/", "")) > 65535) {
+    return { valid: false, message: _("Invalid TUIC URL") };
+  }
+  return { valid: true, message: "Valid" };
+}
 function proxyUrlRejectedMessage(engine) {
   if (`${engine || ""}`.toLowerCase() === "xray") {
     return _(
@@ -1006,7 +1032,7 @@ function proxyUrlRejectedMessage(engine) {
     );
   }
   return _(
-    "URL must start with vless://, vmess://, ss://, trojan://, socks4://, socks4a://, socks5://, hysteria2://, hy2://, wireguard://, wg://, awg://, or vpn://"
+    "URL must start with vless://, vmess://, ss://, trojan://, socks4://, socks4a://, socks5://, hysteria2://, hy2://, tuic://, wireguard://, wg://, awg://, or vpn://"
   );
 }
 function validateProxyUrl(url, engine) {
@@ -1030,6 +1056,9 @@ function validateProxyUrl(url, engine) {
   if (`${engine || ""}`.toLowerCase() === "xray" && wireguardLink) {
     return { valid: false, message: _("WireGuard and AmneziaWG links work only in a sing-box section") };
   }
+  if (`${engine || ""}`.toLowerCase() === "xray" && /^tuic:\/\//i.test(trimmedUrl)) {
+    return { valid: false, message: _("TUIC links work only in a sing-box section") };
+  }
   if (trimmedUrl.startsWith("ss://")) {
     return validateShadowsocksUrl(trimmedUrl);
   }
@@ -1047,6 +1076,9 @@ function validateProxyUrl(url, engine) {
   }
   if (trimmedUrl.startsWith("hysteria2://") || trimmedUrl.startsWith("hy2://")) {
     return validateHysteria2Url(trimmedUrl);
+  }
+  if (/^tuic:\/\//i.test(trimmedUrl)) {
+    return validateTuicUrl(trimmedUrl);
   }
   if (/^(wireguard|wg|awg|amneziawg):\/\//i.test(trimmedUrl) || /\[interface\]/i.test(trimmedUrl)) {
     return validateWireGuardUrl(trimmedUrl);
@@ -1920,6 +1952,29 @@ function renderBookOpenTextIcon24() {
 }
 
 // src/icons/renderCopyIcon24.ts
+function renderEyeOffIcon24() {
+  return svgEl(
+    "svg",
+    {
+      xmlns: "http://www.w3.org/2000/svg",
+      width: "24",
+      height: "24",
+      viewBox: "0 0 24 24",
+      fill: "none",
+      stroke: "currentColor",
+      "stroke-width": "2",
+      "stroke-linecap": "round",
+      "stroke-linejoin": "round"
+    },
+    [
+      svgEl("path", { d: "M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49" }),
+      svgEl("path", { d: "M14.084 14.158a3 3 0 0 1-4.242-4.242" }),
+      svgEl("path", { d: "M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143" }),
+      svgEl("path", { d: "m2 2 20 20" })
+    ]
+  );
+}
+
 function renderCopyIcon24() {
   return svgEl(
     "svg",
@@ -2234,6 +2289,7 @@ function renderDefaultState({
   onChooseOutbound,
   onCopyOutbound,
   onShowUrlTestInfo,
+  onShowBalancerInfo,
   onShowPriorityInfo,
   onTestLatency,
   onProbeOutbound,
@@ -2344,6 +2400,30 @@ function renderDefaultState({
               )
             ] : []
           ]),
+          ...outbound.excludeKey ? [
+            E(
+              "button",
+              {
+                type: "button",
+                class: "btn fkp_dashboard-page__outbound-grid__item__copy-button fkp_dashboard-page__outbound-grid__item__exclude-button",
+                title: _("Exclude"),
+                "aria-label": _("Exclude"),
+                click: (event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  const current = excludedEntriesFor(section);
+                  if (current.some((entry) => entry.key === outbound.excludeKey)) {
+                    return;
+                  }
+                  void setSubscriptionExcluded(section, current.concat([{
+                    key: outbound.excludeKey,
+                    name: String(outbound.displayName || outbound.excludeKey)
+                  }]));
+                }
+              },
+              renderEyeOffIcon24()
+            )
+          ] : [],
           ...canCopyLink ? [
             E(
               "button",
@@ -2375,8 +2455,7 @@ function renderDefaultState({
                   event.stopPropagation();
                   void restartXrayOutbound(outbound);
                 }
-              },
-              xrayRestartLabel(outbound.code)
+              }
             )
           ] : [],
           ...outbound.urlTestInfo ? [
@@ -2390,6 +2469,22 @@ function renderDefaultState({
                 click: (event) => {
                   event.stopPropagation();
                   onShowUrlTestInfo(outbound);
+                }
+              },
+              renderInfoIcon24()
+            )
+          ] : [],
+          ...outbound.balancerInfo ? [
+            E(
+              "button",
+              {
+                type: "button",
+                class: "btn fkp_dashboard-page__outbound-grid__item__copy-button",
+                title: balancerDetailsTitle(outbound.balancerInfo),
+                "aria-label": balancerDetailsTitle(outbound.balancerInfo),
+                click: (event) => {
+                  event.stopPropagation();
+                  onShowBalancerInfo(outbound);
                 }
               },
               renderInfoIcon24()
@@ -2426,8 +2521,7 @@ function renderDefaultState({
                   event.stopPropagation();
                   void onProbeOutbound(section, outbound);
                 }
-              },
-              outboundProbeRunning[outbound.code] ? "…" : _("Forkop ping")
+              }
             )
           ] : []
         ]),
@@ -2441,6 +2535,18 @@ function renderDefaultState({
         ])
       ]
     );
+  }
+  function outboundHasNoAnswer(outbound) {
+    if (outbound?.probeState !== "dead") {
+      return false;
+    }
+    if (isXrayStrategyCode(outbound?.code)) {
+      const key = `${outbound.displayName || ""} ${outbound.type || ""}`.toLowerCase();
+      if (key.includes("round") || key.includes("random")) {
+        return false;
+      }
+    }
+    return true;
   }
   const metadataNodes = (section.subscriptionMetadata || []).map((metadata) => renderSubscriptionMetadata(metadata)).filter(Boolean);
   const subscriptionUpdateAction = renderSubscriptionUpdateAction(
@@ -2464,6 +2570,22 @@ function renderDefaultState({
           class: "fkp_dashboard-page__outbound-section__title-section__actions"
         },
         [
+          ...renderXraySectionActions(section),
+          ...excludedEntriesFor(section).length ? [E(
+            "button",
+            {
+              type: "button",
+              class: "btn dashboard-sections-grid-item-test-latency",
+              title: _("Excluded"),
+              "aria-label": _("Excluded"),
+              click: (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                showExcludedSubscriptionModal(section);
+              }
+            },
+            `${_("Excluded")} (${excludedEntriesFor(section).length})`
+          )] : [],
           ...subscriptionUpdateAction ? [subscriptionUpdateAction] : [],
           E(
             "button",
@@ -2511,7 +2633,10 @@ function renderDefaultState({
     ),
     E("div", { class: "fkp_dashboard-page__outbound-grid" }, [
       ...metadataNodes,
-      ...section.outbounds.map((outbound) => renderOutbound(outbound))
+      ...section.outbounds.filter((outbound) => {
+        const excluded = Boolean(outbound.excludeKey) && excludedEntriesFor(section).some((entry) => entry.key === outbound.excludeKey);
+        return !(excluded || hiddenDeadSections[section.sectionName] === true && outboundHasNoAnswer(outbound));
+      }).map((outbound) => renderOutbound(outbound))
     ])
   ]);
 }
@@ -2689,6 +2814,8 @@ function render() {
             onCopyOutbound: () => {
             },
             onShowUrlTestInfo: () => {
+            },
+            onShowBalancerInfo: () => {
             },
             onShowPriorityInfo: () => {
             },
@@ -3113,6 +3240,12 @@ var ForkopShellMethods = {
     [tag],
     "/usr/bin/forkop",
     { timeout: 2e4, allowNonZeroWithStdout: true }
+  ),
+  setXraySectionOutbounds: async (section, mode) => callBaseMethod(
+    "set_xray_section_outbounds",
+    [section, mode],
+    "/usr/bin/forkop",
+    { timeout: 18e4, allowNonZeroWithStdout: true }
   ),
   getXrayStoppedOutbounds: async () => callBaseMethod(
     "xray_stopped_outbounds",
@@ -3616,6 +3749,8 @@ function hydrateConfigSections(configSections) {
   const interfaces = childSections(configSections, "section_interface");
   const openconnectClients = childSections(configSections, "openconnect");
   const openvpnClients = childSections(configSections, "openvpn");
+  const warpClients = childSections(configSections, "warp");
+  const masqueClients = childSections(configSections, "masque");
   const urltests = childSections(configSections, "urltest");
   const priorityGroups = childSections(configSections, "priority_group");
   const priorityLevels = childSections(configSections, "priority_level");
@@ -3628,6 +3763,8 @@ function hydrateConfigSections(configSections) {
     const interfaceItems = ownedChildSections(next, interfaces);
     const openconnectItems = ownedChildSections(next, openconnectClients);
     const openvpnItems = ownedChildSections(next, openvpnClients);
+    const warpItems = ownedChildSections(next, warpClients);
+    const masqueItems = ownedChildSections(next, masqueClients);
     const urltestItems = ownedChildSections(next, urltests);
     const priorityGroupItems = ownedChildSections(next, priorityGroups);
     if (subscriptionUrlItems.length) {
@@ -3664,6 +3801,12 @@ function hydrateConfigSections(configSections) {
     }
     if (openvpnItems.length) {
       next.openvpn_clients = openvpnItems;
+    }
+    if (warpItems.length) {
+      next.warp_clients = warpItems;
+    }
+    if (masqueItems.length) {
+      next.masque_clients = masqueItems;
     }
     if (urltestItems.length) {
       const settings = {};
@@ -3824,6 +3967,19 @@ function isSelectorOutbound(outbound) {
 }
 function isUrlTestProxyEntry(entry) {
   return entry?.value?.type?.toLowerCase() === "urltest";
+}
+function measuredBalancerKind(entry) {
+  const key = String(entry?.value?.type || "").toLowerCase().replace(/[\s_-]/g, "");
+  if (key === "leastping") {
+    return "leastPing";
+  }
+  if (key === "leastload") {
+    return "leastLoad";
+  }
+  return "";
+}
+function balancerDetailsTitle(info) {
+  return info?.kind === "leastLoad" ? _("Least load details") : _("Least ping details");
 }
 function getLatencySortValue(outbound) {
   const latency = Number(outbound.latency);
@@ -4140,7 +4296,9 @@ function buildUrlTestInfo({
   const outbounds = sortUrlTestMembers(
     childCodes.flatMap((childCode) => {
       const childEntry = proxyByCode.get(childCode);
-      const link = manualLinkByCode.get(childCode) || cachedProxyLinks.get(childCode) || "";
+      const manualLink = manualLinkByCode.get(childCode) || "";
+      const link = dashboardOutboundLink(childEntry, manualLink, cachedProxyLinks.get(childCode) || "");
+      const nameLink = childEntry?.value?.xrayNode && !manualLink ? "" : link;
       const canCopyLink = isCopyableProxyLink(link);
       return [
         {
@@ -4148,9 +4306,9 @@ function buildUrlTestInfo({
           displayName: getOutboundDisplayName(
             childCode,
             childEntry,
-            link,
+            nameLink,
             outboundMetadata,
-            cachedProxyLinks.has(childCode)
+            childEntry?.value?.xrayNode ? false : cachedProxyLinks.has(childCode)
           ),
           latency: childEntry?.value?.history?.[0]?.delay || 0,
           type: childEntry?.value?.type || "",
@@ -4173,6 +4331,72 @@ function buildUrlTestInfo({
     tolerance: groupCache?.tolerance,
     idleTimeout: groupCache?.idle_timeout || "30m",
     interruptExistConnections: groupCache?.interrupt_exist_connections,
+    outbounds
+  };
+}
+function balancerProbeUrl(section) {
+  const url = String(section?.xray_probe_url || "").trim();
+  return url || "https://www.gstatic.com/generate_204";
+}
+function balancerProbeInterval(section) {
+  const interval = String(section?.xray_probe_interval || "").trim();
+  return /^[0-9]+(ms|s|m|h)$/.test(interval) ? interval : "3m";
+}
+function buildBalancerInfo({
+  code,
+  displayName,
+  entry,
+  section,
+  kind,
+  proxyByCode,
+  manualLinkByCode,
+  cachedProxyLinks,
+  outboundMetadata,
+  showDetectedCountries
+}) {
+  const childCodes = uniqueCodes(entry?.value.all || []);
+  const selectedCode = entry?.value.now || "";
+  const outbounds = sortUrlTestMembers(
+    childCodes.flatMap((childCode) => {
+      const childEntry = proxyByCode.get(childCode);
+      const manualLink = manualLinkByCode.get(childCode) || "";
+      const link = dashboardOutboundLink(childEntry, manualLink, cachedProxyLinks.get(childCode) || "");
+      const nameLink = childEntry?.value?.xrayNode && !manualLink ? "" : link;
+      return [
+        {
+          code: childCode,
+          displayName: getOutboundDisplayName(
+            childCode,
+            childEntry,
+            nameLink,
+            outboundMetadata,
+            childEntry?.value?.xrayNode ? false : cachedProxyLinks.has(childCode)
+          ),
+          latency: childEntry?.value?.history?.[0]?.delay || 0,
+          type: childEntry?.value?.type || "",
+          selected: selectedCode === childCode,
+          link,
+          canCopyLink: isCopyableProxyLink(link),
+          country: showDetectedCountries ? outboundMetadata?.countries?.[childCode] : void 0
+        }
+      ];
+    })
+  );
+  const selectedName = outbounds.find((outbound) => outbound.code === selectedCode)?.displayName || selectedCode;
+  const maxRtt = String(section?.xray_leastload_max_rtt || "").trim();
+  const tolerance = String(section?.xray_leastload_tolerance || "").trim();
+  const expected = String(section?.xray_leastload_expected || "").trim();
+  return {
+    kind,
+    code,
+    displayName,
+    selectedCode: selectedCode || void 0,
+    selectedName: selectedName || void 0,
+    url: balancerProbeUrl(section),
+    interval: balancerProbeInterval(section),
+    expected: kind === "leastLoad" ? expected || "1" : void 0,
+    maxRtt: kind === "leastLoad" ? maxRtt || "1s" : void 0,
+    tolerance: kind === "leastLoad" ? tolerance || "0.5" : void 0,
     outbounds
   };
 }
@@ -4218,16 +4442,18 @@ function buildPriorityInfo({
   const outbounds = levels.flatMap((level, levelIndex) => {
     const members = uniqueCodes(level.outbounds || []).map((childCode) => {
       const childEntry = proxyByCode.get(childCode);
-      const link = manualLinkByCode.get(childCode) || cachedProxyLinks.get(childCode) || "";
+      const manualLink = manualLinkByCode.get(childCode) || "";
+      const link = dashboardOutboundLink(childEntry, manualLink, cachedProxyLinks.get(childCode) || "");
+      const nameLink = childEntry?.value?.xrayNode && !manualLink ? "" : link;
       const canCopyLink = isCopyableProxyLink(link);
       return {
         code: childCode,
         displayName: getOutboundDisplayName(
           childCode,
           childEntry,
-          link,
+          nameLink,
           outboundMetadata,
-          cachedProxyLinks.has(childCode)
+          childEntry?.value?.xrayNode ? false : cachedProxyLinks.has(childCode)
         ),
         latency: childEntry?.value?.history?.[0]?.delay || 0,
         type: childEntry?.value?.type || "",
@@ -4265,7 +4491,12 @@ function buildPriorityInfo({
     outbounds
   };
 }
-function buildProxyGroupOutbounds(section, proxies, outboundMetadata, urltestGroups = {}, priorityGroups = {}, cachedProxyLinks = /* @__PURE__ */ new Map(), probeDelays = {}, routingEngine = "sing-box") {
+function dashboardOutboundLink(entry, manualLink, cacheLink) {
+  if (entry?.value?.xrayNode)
+    return manualLink || String(entry.value.shareLink || "");
+  return manualLink || cacheLink || "";
+}
+function buildProxyGroupOutbounds(section, proxies, outboundMetadata, urltestGroups = {}, priorityGroups = {}, cachedProxyLinks = /* @__PURE__ */ new Map(), probeDelays = {}, routingEngine = "sing-box", subscriptionServerTags = /* @__PURE__ */ new Set(), excludeKeys = {}) {
   const sectionName = section[".name"];
   const proxyByCode = getProxyEntryByCode(proxies);
   const selectorTag = getOutboundTagBySection(sectionName);
@@ -4314,40 +4545,64 @@ function buildProxyGroupOutbounds(section, proxies, outboundMetadata, urltestGro
     if (!item && !urlTestConfig && !priorityConfig) {
       return [];
     }
-    const link = manualLinkByCode.get(code) || cachedProxyLinks.get(code) || "";
+    const fromXrayNode = Boolean(item?.value?.xrayNode);
+    const manualLink = manualLinkByCode.get(code) || "";
+    const link = dashboardOutboundLink(item, manualLink, cachedProxyLinks.get(code) || "");
+    const nameLink = fromXrayNode && !manualLink ? "" : link;
     const canCopyLink = isCopyableProxyLink(link);
+    const nodeSubscription = fromXrayNode ? String(item?.value?.nodeSource || "") === "subscription" : subscriptionServerTags.has(code);
     const displayName = priorityConfig?.displayName || urlTestConfig?.displayName || getOutboundDisplayName(
       code,
       item,
-      link,
+      nameLink,
       outboundMetadata,
-      cachedProxyLinks.has(code)
+      fromXrayNode ? false : cachedProxyLinks.has(code)
     );
     const isRuntimeUrlTest = isUrlTestProxyEntry(item);
     const historyDelay = item?.value.history?.[0]?.delay || 0;
     const measured = openConnectMeasuredDelay(code, probeDelays);
+    let latency = measured.used ? measured.delay : historyDelay;
+    let probeState = measured.used ? measured.probeState : item?.value.probeState || "";
+    if (!measured.used && latency > 0 && !probeState) {
+      probeState = "alive";
+    } else if (!measured.used && latency <= 0 && !probeState && Object.prototype.hasOwnProperty.call(probeDelays, code)) {
+      const stored = Math.max(0, Number(probeDelays[code]) || 0);
+      latency = stored;
+      probeState = stored > 0 ? "alive" : "dead";
+    }
     const tunnelProtocol = tunnelProtocolLabel(section, code);
     const baseLabel = priorityConfig ? "Priority" : dashboardClashType(
       item?.value.type,
       outboundMetadata?.protocols?.[code]
     ) || "URLTest";
-    const transport = item?.value.transport || transportFromShareLink(link);
+    const transport = item?.value.transport || transportFromShareLink(nameLink);
     return [
       {
         code,
         displayName,
-        latency: measured.used ? measured.delay : historyDelay,
-        probeState: measured.used ? measured.probeState : item?.value.probeState || "",
+        latency,
+        probeState,
         type: tunnelProtocol ? baseLabel : protocolWithTransport(baseLabel, transport),
         badges: outboundBadges(
           baseLabel,
           tunnelProtocol || (priorityConfig ? "" : transport),
-          tunnelProtocol || priorityConfig ? "" : item?.value.security || securityFromShareLink(link),
-          tunnelProtocol || priorityConfig ? "" : item?.value.mask || maskFromShareLink(link)
+          tunnelProtocol || priorityConfig ? "" : item?.value.security || securityFromShareLink(nameLink),
+          tunnelProtocol || priorityConfig ? "" : item?.value.mask || maskFromShareLink(nameLink)
         ),
         selected: selector?.value?.now === code,
         link,
         canCopyLink,
+        subscriptionServer: nodeSubscription && !urlTestConfig && !priorityConfig && !isRuntimeUrlTest,
+        excludeKey: outboundExcludeKey({
+          section,
+          code,
+          displayName,
+          link,
+          manualLink,
+          subscriptionServer: nodeSubscription,
+          strategy: Boolean(urlTestConfig || priorityConfig || isRuntimeUrlTest || isXrayStrategyCode(code)),
+          cachedExcludeKey: fromXrayNode ? String(item?.value?.nodeExcludeKey || "") : excludeKeys?.[code]
+        }),
         country: showDetectedCountries ? outboundMetadata?.countries?.[code] : void 0,
         runtimeAvailable: item ? void 0 : false,
         urlTestInfo: urlTestConfig || isRuntimeUrlTest ? buildUrlTestInfo({
@@ -4360,6 +4615,18 @@ function buildProxyGroupOutbounds(section, proxies, outboundMetadata, urltestGro
           cachedProxyLinks,
           outboundMetadata,
           showDetectedCountries: urlTestConfig?.showDetectedCountries || showDetectedCountries
+        }) : void 0,
+        balancerInfo: isXrayStrategyCode(code) && measuredBalancerKind(item) ? buildBalancerInfo({
+          code,
+          displayName,
+          entry: item,
+          section,
+          kind: measuredBalancerKind(item),
+          proxyByCode,
+          manualLinkByCode,
+          cachedProxyLinks,
+          outboundMetadata,
+          showDetectedCountries
         }) : void 0,
         priorityInfo: priorityConfig ? buildPriorityInfo({
           config: priorityConfig,
@@ -4547,6 +4814,7 @@ function dashboardClashType(clashType, protocol) {
     hysteria: "Hysteria2",
     hysteria2: "Hysteria2",
     hy2: "Hysteria2",
+    tuic: "TUIC",
     openconnect: "OpenConnect",
     openvpn: "OpenVPN",
     "openvpn-client": "OpenVPN",
@@ -4576,6 +4844,73 @@ function getCachedProxyLinks(dashboardCache) {
       ([, link]) => isCopyableProxyLink(link)
     )
   );
+}
+function getSubscriptionServerTags(dashboardCache) {
+  const raw = dashboardCache?.subscriptionTags;
+  return new Set(Array.isArray(raw) ? raw.map((tag) => String(tag || "").trim()).filter(Boolean) : []);
+}
+function getExcludeKeys(dashboardCache) {
+  const raw = dashboardCache?.excludeKeys;
+  return raw && typeof raw === "object" ? raw : {};
+}
+function excludeKeyFromTag(section, code) {
+  const text = String(code || "");
+  const warp = text.match(/-warp-(\d+)$/);
+  if (warp) {
+    const client = (section?.warp_clients || [])[Number(warp[1]) - 1];
+    return client?.[".name"] ? `warp:${client[".name"]}` : "";
+  }
+  const masque = text.match(/-masque-(\d+)$/);
+  if (masque) {
+    const client = (section?.masque_clients || [])[Number(masque[1]) - 1];
+    return client?.[".name"] ? `masque:${client[".name"]}` : "";
+  }
+  const openconnect = text.match(/-openconnect-(\d+)$/);
+  if (openconnect) {
+    const client = (section?.openconnect_clients || [])[Number(openconnect[1]) - 1];
+    return client?.[".name"] ? `openconnect:${client[".name"]}` : "";
+  }
+  const openvpn = text.match(/-openvpn-(\d+)$/);
+  if (openvpn) {
+    const client = (section?.openvpn_clients || [])[Number(openvpn[1]) - 1];
+    return client?.[".name"] ? `openvpn:${client[".name"]}` : "";
+  }
+  const iface = text.match(/-interface-(\d+)(?:-out)?$/) || text.match(/-iface-(\d+)(?:-out)?$/);
+  if (iface) {
+    const name = (section?.interfaces || [])[Number(iface[1]) - 1];
+    return name ? `iface:${name}` : "";
+  }
+  return "";
+}
+function outboundExcludeKey({
+  section,
+  code,
+  displayName,
+  link,
+  manualLink,
+  subscriptionServer,
+  strategy,
+  cachedExcludeKey
+}) {
+  if (strategy) {
+    return "";
+  }
+  const cached = String(cachedExcludeKey || "").trim();
+  if (cached) {
+    return cached;
+  }
+  if (subscriptionServer) {
+    const name = String(displayName || "").trim();
+    return name ? `sub:${name}` : "";
+  }
+  const manual = String(manualLink || "").trim();
+  if (manual) {
+    return `link:${manual}`;
+  }
+  if (link && getManualProxyLinks(section).includes(link)) {
+    return `link:${link}`;
+  }
+  return excludeKeyFromTag(section, code);
 }
 function normalizeTransport(value) {
   const raw = String(value || "").trim().toLowerCase();
@@ -4710,13 +5045,350 @@ function transportFromShareLink(link) {
   if (explicit) {
     return explicit;
   }
-  if (scheme === "hysteria2" || scheme === "hy2" || scheme === "hysteria") {
+  if (scheme === "hysteria2" || scheme === "hy2" || scheme === "hysteria" || scheme === "tuic") {
     return "quic";
   }
   if (scheme === "vless" || scheme === "vmess" || scheme === "trojan" || scheme === "ss" || scheme === "shadowsocks") {
     return "tcp";
   }
   return "";
+}
+const HIDE_DEAD_STORAGE_KEY = "forkop-dashboard-hide-dead";
+const subscriptionExcludedOverride = {};
+let exclusionState = { slot: "", sections: null };
+let subscriptionReloadTimer = 0;
+function exclusionMemoryKey(sectionName) {
+  return `${exclusionState.slot}\n${sectionName}`;
+}
+async function loadExclusionState() {
+  const response = await callBaseMethod("exclusion_get");
+  const data = response?.success ? response.data : null;
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    exclusionState = { slot: "", sections: null };
+    return;
+  }
+  exclusionState = {
+    slot: String(data.slot || ""),
+    sections: data.sections && typeof data.sections === "object" && !Array.isArray(data.sections) ? data.sections : {}
+  };
+}
+function normalizeExcludedEntries(value) {
+  let source = value;
+  if (typeof source === "string") {
+    const text = source.trim();
+    if (text.startsWith("[")) {
+      try {
+        source = JSON.parse(text);
+      } catch {
+        source = [];
+      }
+    }
+  }
+  const list = Array.isArray(source) ? source : source ? [source] : [];
+  const entries = [];
+  const seen = {};
+  list.forEach((item) => {
+    let key = "";
+    let name = "";
+    if (item && typeof item === "object") {
+      key = String(item.key || "").trim();
+      name = String(item.name || "").trim();
+      if (!key && name) {
+        key = `sub:${name}`;
+      }
+    } else {
+      name = String(item || "").trim();
+      if (name) {
+        key = `sub:${name}`;
+      }
+    }
+    if (!key || seen[key]) {
+      return;
+    }
+    if (!name && key.startsWith("sub:")) {
+      name = key.slice(4);
+    }
+    seen[key] = true;
+    entries.push({ key, name: name || key });
+  });
+  return entries;
+}
+function sameExcludedEntries(left, right) {
+  if (left.length !== right.length) {
+    return false;
+  }
+  return left.every((entry, index) => entry.key === right[index]?.key);
+}
+function excludedEntriesFor(section) {
+  const sectionName = String(section?.sectionName || "");
+  const key = exclusionMemoryKey(sectionName);
+  if (sectionName && Object.prototype.hasOwnProperty.call(subscriptionExcludedOverride, key)) {
+    return subscriptionExcludedOverride[key];
+  }
+  if (exclusionState.sections) {
+    return normalizeExcludedEntries(exclusionState.sections[sectionName]);
+  }
+  return normalizeExcludedEntries(section?.subscriptionExcluded);
+}
+function rememberExcludedEntries(sectionName, entries) {
+  subscriptionExcludedOverride[exclusionMemoryKey(sectionName)] = entries.slice();
+}
+function releaseExcludedOverride(sectionName, entries) {
+  const key = exclusionMemoryKey(sectionName);
+  const override = subscriptionExcludedOverride[key];
+  if (override && sameExcludedEntries(override, entries)) {
+    delete subscriptionExcludedOverride[key];
+  }
+}
+function scheduleSubscriptionReload() {
+  if (subscriptionReloadTimer) {
+    clearTimeout(subscriptionReloadTimer);
+  }
+  subscriptionReloadTimer = setTimeout(() => {
+    subscriptionReloadTimer = 0;
+    void executeShellCommand({
+      command: "/etc/init.d/forkop",
+      args: ["reload"],
+      timeout: 18e4
+    });
+  }, 800);
+}
+async function writeSubscriptionExcluded(sectionName, entries) {
+  if (!/^[A-Za-z0-9_]+$/.test(sectionName)) {
+    return false;
+  }
+  const response = await callBaseMethod("exclusion_set", [sectionName, JSON.stringify(entries)]);
+  if (response?.success !== true) {
+    return false;
+  }
+  if (!exclusionState.sections) {
+    exclusionState.sections = {};
+  }
+  exclusionState.sections[sectionName] = entries;
+  return true;
+}
+async function setSubscriptionExcluded(section, entries) {
+  const sectionName = String(section?.sectionName || "");
+  const next = normalizeExcludedEntries(entries);
+  if (!sectionName) {
+    return;
+  }
+  rememberExcludedEntries(sectionName, next);
+  void renderSectionsWidget();
+  let saved = false;
+  try {
+    saved = await writeSubscriptionExcluded(sectionName, next);
+  } catch (error) {
+    logger.error("[DASHBOARD]", "setSubscriptionExcluded failed", error);
+    saved = false;
+  }
+  if (!saved) {
+    delete subscriptionExcludedOverride[exclusionMemoryKey(sectionName)];
+    void renderSectionsWidget();
+    showToast(_("Failed to save the excluded server list"), "error");
+    return;
+  }
+  scheduleSubscriptionReload();
+}
+function showExcludedSubscriptionModal(section) {
+  const entries = excludedEntriesFor(section);
+  ui.showModal(_("Excluded"), [
+    E("div", { class: "fkp_dashboard-page__excluded-list" }, entries.length ? entries.map((entry) => E("div", { class: "fkp_dashboard-page__excluded-row" }, [
+      E("span", { class: "fkp_dashboard-page__excluded-name" }, renderFlagEmojis(entry.name)),
+      E("button", {
+        type: "button",
+        class: "btn",
+        click: (event) => {
+          event.preventDefault();
+          ui.hideModal();
+          void setSubscriptionExcluded(section, entries.filter((item) => item.key !== entry.key));
+        }
+      }, _("Restore"))
+    ])) : [E("p", {}, _("No"))]),
+    E("div", { class: "right" }, [
+      E("button", {
+        type: "button",
+        class: "btn",
+        click: () => ui.hideModal()
+      }, _("Close")),
+      ...entries.length ? [E("button", {
+        type: "button",
+        class: "btn cbi-button-action",
+        click: (event) => {
+          event.preventDefault();
+          ui.hideModal();
+          void setSubscriptionExcluded(section, []);
+        }
+      }, _("Restore all"))] : []
+    ])
+  ]);
+}
+function readHiddenDeadSections() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(HIDE_DEAD_STORAGE_KEY) || "{}");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {};
+    }
+    const next = {};
+    Object.keys(parsed).forEach((name) => {
+      if (parsed[name] === true && /^[A-Za-z0-9_]+$/.test(name)) {
+        next[name] = true;
+      }
+    });
+    return next;
+  } catch {
+    return {};
+  }
+}
+function writeHiddenDeadSections() {
+  try {
+    localStorage.setItem(HIDE_DEAD_STORAGE_KEY, JSON.stringify(hiddenDeadSections));
+  } catch {
+  }
+}
+const hiddenDeadSections = readHiddenDeadSections();
+function sectionPowerKey(sectionName, mode) {
+  return `section:${sectionName}:${mode || ""}`;
+}
+function xraySectionPowerMode(section) {
+  const outbounds = (section?.outbounds || []).filter((outbound) => canRestartXrayOutbound(outbound));
+  if (outbounds.length > 0 && outbounds.every((outbound) => xrayOutboundOff(outbound.code))) {
+    return "on";
+  }
+  return "off";
+}
+function xraySectionPowerModeFromButton(button) {
+  const root = button.closest(".fkp_dashboard-page__outbound-section");
+  const cards = root ? [...root.querySelectorAll("[data-xray-restart]")] : [];
+  if (cards.length > 0 && cards.every((card) => card.classList.contains("is-off"))) {
+    return "on";
+  }
+  return "off";
+}
+function xraySectionButtonLabel(sectionName, mode) {
+  const key = sectionPowerKey(sectionName, mode);
+  if (xrayPower.running === sectionPowerKey(sectionName)) {
+    return "…";
+  }
+  if (xrayPower.failed === key) {
+    return _("No");
+  }
+  return mode === "on" ? _("Enable all") : _("Disable all");
+}
+function paintXraySectionButtons() {
+  document.querySelectorAll("[data-xray-section-power]").forEach((button) => {
+    const sectionName = button.getAttribute("data-xray-section") || "";
+    const mode = button.getAttribute("data-xray-section-power") || "";
+    if (mode === "hide") {
+      const hidden = hiddenDeadSections[sectionName] === true;
+      button.classList.toggle("is-active", hidden);
+      const showLabel = button.querySelector("[data-hide-label='show']");
+      const hideLabel = button.querySelector("[data-hide-label='hide']");
+      if (showLabel && hideLabel) {
+        showLabel.classList.toggle("is-hidden", !hidden);
+        hideLabel.classList.toggle("is-hidden", hidden);
+      }
+      button.title = hidden ? _("Show not responding") : _("Hide not responding");
+      button.setAttribute("aria-label", button.title);
+      button.disabled = false;
+      return;
+    }
+    const next = xraySectionPowerModeFromButton(button);
+    const label = xraySectionButtonLabel(sectionName, next);
+    const title = next === "on" ? _("Enable all") : _("Disable all");
+    button.textContent = label;
+    button.title = xrayPower.failed === sectionPowerKey(sectionName, next) && xrayPower.reason ? xrayPower.reason : title;
+    button.setAttribute("aria-label", title);
+    button.classList.toggle("is-active", next === "on");
+    button.disabled = xrayPower.running !== "";
+  });
+}
+async function setXraySectionPower(section, mode) {
+  const sectionName = String(section?.sectionName || "");
+  if (!sectionName || xrayPower.running || section?.proxyCore !== "xray") {
+    return;
+  }
+  xrayPower.running = sectionPowerKey(sectionName);
+  xrayPower.failed = "";
+  xrayPower.reason = "";
+  paintXrayRestartButtons();
+  paintXraySectionButtons();
+  const response = await ForkopShellMethods.setXraySectionOutbounds(sectionName, mode);
+  const payload = xrayRestartPayload(response);
+  xrayPower.running = "";
+  if (Array.isArray(payload.stopped)) {
+    const next = {};
+    payload.stopped.forEach((tag) => {
+      const code = String(tag || "").trim();
+      if (code) {
+        next[code] = true;
+      }
+    });
+    xrayPower.off = next;
+  }
+  if (payload.success === true) {
+    xrayPower.failed = "";
+    xrayPower.reason = "";
+  } else {
+    xrayPower.failed = sectionPowerKey(sectionName, mode);
+    xrayPower.reason = String(payload.error || "");
+  }
+  paintXrayRestartButtons();
+  paintXraySectionButtons();
+}
+function renderXraySectionActions(section) {
+  const sectionName = section?.sectionName;
+  if (!sectionName) {
+    return [];
+  }
+  const powerMode = section.proxyCore === "xray" ? xraySectionPowerMode(section) : "off";
+  const button = (mode, label) => E(
+    "button",
+    {
+      type: "button",
+      class: "btn dashboard-sections-grid-item-test-latency" + (mode === "hide" ? " dashboard-hide-dead" : "") + ((mode === "hide" && hiddenDeadSections[sectionName]) || (mode === "power" && powerMode === "on") ? " is-active" : ""),
+      "data-xray-section": sectionName,
+      "data-xray-section-power": mode,
+      title: label,
+      "aria-label": label,
+      disabled: mode === "hide" ? void 0 : xrayPower.running ? true : void 0,
+      click: (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (mode === "hide") {
+          if (hiddenDeadSections[sectionName] === true) {
+            delete hiddenDeadSections[sectionName];
+          } else {
+            hiddenDeadSections[sectionName] = true;
+          }
+          writeHiddenDeadSections();
+          void renderSectionsWidget();
+          return;
+        }
+        if (xrayPower.running) {
+          return;
+        }
+        void setXraySectionPower(section, xraySectionPowerMode(section));
+      }
+    },
+    mode === "hide" ? E("span", { class: "dashboard-hide-dead-labels" }, [
+      E("span", {
+        "data-hide-label": "hide",
+        class: hiddenDeadSections[sectionName] ? "is-hidden" : ""
+      }, _("Hide not responding")),
+      E("span", {
+        "data-hide-label": "show",
+        class: hiddenDeadSections[sectionName] ? "" : "is-hidden"
+      }, _("Show not responding"))
+    ]) : xraySectionButtonLabel(sectionName, powerMode)
+  );
+  const actions = [
+    button("hide", hiddenDeadSections[sectionName] ? _("Show not responding") : _("Hide not responding"))
+  ];
+  if (section.proxyCore === "xray") {
+    actions.unshift(button("power", powerMode === "on" ? _("Enable all") : _("Disable all")));
+  }
+  return actions;
 }
 function canRestartXrayOutbound(outbound) {
   if (String(outbound?.proxyCore || "").toLowerCase() !== "xray") {
@@ -4737,15 +5409,6 @@ var xrayPower = {
 function xrayOutboundOff(code) {
   return xrayPower.off[code] === true;
 }
-function xrayRestartLabel(code) {
-  if (xrayPower.running === code) {
-    return "…";
-  }
-  if (xrayPower.failed === code) {
-    return _("No");
-  }
-  return xrayOutboundOff(code) ? _("Xray off") : _("Xray on");
-}
 function xrayRestartTitle(code) {
   if (xrayPower.running === code) {
     return xrayOutboundOff(code) ? _("Turn on Xray outbound") : _("Turn off Xray outbound");
@@ -4760,7 +5423,7 @@ function paintXrayRestartButtons() {
   document.querySelectorAll("[data-xray-restart]").forEach((button) => {
     const code = button.getAttribute("data-xray-restart") || "";
     const title = xrayRestartTitle(code);
-    button.textContent = xrayRestartLabel(code);
+    button.textContent = "";
     button.title = title;
     button.setAttribute("aria-label", title);
     button.disabled = xrayPower.running !== "";
@@ -4805,6 +5468,7 @@ async function restartXrayOutbound(outbound) {
   xrayPower.failed = "";
   xrayPower.reason = "";
   paintXrayRestartButtons();
+  paintXraySectionButtons();
   const response = await ForkopShellMethods.restartXrayOutbound(code);
   const payload = xrayRestartPayload(response);
   xrayPower.running = "";
@@ -4821,6 +5485,7 @@ async function restartXrayOutbound(outbound) {
     xrayPower.reason = String(payload.error || "");
   }
   paintXrayRestartButtons();
+  paintXraySectionButtons();
 }
 function clashProtocolType(protocol, kind) {
   const value = String(protocol || kind || "").trim().toLowerCase();
@@ -4878,6 +5543,10 @@ function mergeXrayNodesIntoClashProxies(proxies, configSections, xrayPayload) {
       ) || {};
       const probed = node.probed === true;
       const delay = Number(node.delay || 0);
+      const memberTags = tags.filter((item) => item !== "__urltest__");
+      const strategyKey = String(node.protocol || "").toLowerCase().replace(/[\s_-]/g, "");
+      const measured = tag === "__urltest__" && (strategyKey === "leastping" || strategyKey === "leastload");
+      const activeTag = String(node.active || "");
       next[proxyCode] = {
         type: clashProtocolType(node.protocol, node.kind),
         name: String(node.name || tag),
@@ -4887,8 +5556,12 @@ function mergeXrayNodesIntoClashProxies(proxies, configSections, xrayPayload) {
         mask: String(node.mask || ""),
         history: probed ? [{ time: (/* @__PURE__ */ new Date()).toISOString(), delay }] : next[proxyCode]?.history || [],
         probeState: probed ? delay > 0 ? "alive" : "dead" : "",
-        now: void 0,
-        all: void 0
+        now: measured && activeTag && memberTags.includes(activeTag) ? activeTag : void 0,
+        all: measured ? memberTags : void 0,
+        xrayNode: true,
+        shareLink: String(node.link || ""),
+        nodeExcludeKey: String(node.excludeKey || ""),
+        nodeSource: String(node.source || "")
       };
     });
     next[selectorTag] = {
@@ -4942,6 +5615,48 @@ function openConnectMeasuredDelay(code, probeDelays) {
 function cachedOpenConnectDelay(code) {
   return Math.max(0, Number(openConnectDelayCache[code]) || 0);
 }
+const probeAnswerCache = {};
+function rememberProbeAnswer(code, latency, probeState) {
+  const tag = String(code || "");
+  const state = probeState === "dead" || probeState === "alive" ? probeState : Number(latency) > 0 ? "alive" : "";
+  if (!tag || !state) {
+    return;
+  }
+  probeAnswerCache[tag] = {
+    latency: state === "alive" ? Math.max(0, Number(latency) || 0) : 0,
+    probeState: state
+  };
+}
+function keepProbeAnswers(sections) {
+  if (!Array.isArray(sections)) {
+    return sections;
+  }
+  return sections.map((section) => {
+    if (!section || !Array.isArray(section.outbounds)) {
+      return section;
+    }
+    let changed = false;
+    const outbounds = section.outbounds.map((outbound) => {
+      const latency = Math.max(0, Number(outbound?.latency) || 0);
+      const state = outbound?.probeState === "dead" || outbound?.probeState === "alive" ? outbound.probeState : "";
+      if (latency > 0 || state) {
+        rememberProbeAnswer(outbound.code, latency, state);
+        return outbound;
+      }
+      const cached = probeAnswerCache[outbound.code];
+      if (!cached) {
+        return outbound;
+      }
+      changed = true;
+      return {
+        ...outbound,
+        latency: cached.latency,
+        probeState: cached.probeState
+      };
+    });
+    return changed ? { ...section, outbounds } : section;
+  });
+}
 function keepOpenConnectDelays(sections) {
   if (!Array.isArray(sections)) {
     return sections;
@@ -4982,6 +5697,7 @@ function keepOpenConnectDelays(sections) {
 async function getDashboardSections(options = {}) {
   const includeSubscriptionCopyState = options.includeSubscriptionCopyState ?? true;
   const configSections = hydrateConfigSections(await getConfigSections());
+  await loadExclusionState();
   const [clashProxies, xrayNodes, xrayStopped] = await Promise.all([
     getClashApiProxies(configSections),
     ForkopShellMethods.getXrayNodes?.() ?? Promise.resolve({ success: true, data: { nodes: {}, selected: {} } }),
@@ -5049,6 +5765,8 @@ async function getDashboardSections(options = {}) {
           dashboardCache
         ) : void 0;
         const cachedProxyLinks = includeSubscriptionCopyState ? getCachedProxyLinks(dashboardCache) : /* @__PURE__ */ new Map();
+        const subscriptionServerTags = getSubscriptionServerTags(dashboardCache);
+        const excludeKeys = getExcludeKeys(dashboardCache);
         const urltestGroups = getUrlTestGroups(dashboardCache);
         const priorityGroups = getPriorityGroups(dashboardCache);
         const { selector, latencyTestCode, latencyTestCodes, outbounds } = buildProxyGroupOutbounds(
@@ -5059,8 +5777,12 @@ async function getDashboardSections(options = {}) {
           priorityGroups,
           cachedProxyLinks,
           probeDelays,
-          routingEngine
+          routingEngine,
+          subscriptionServerTags,
+          excludeKeys
         );
+        const subscriptionExcluded = normalizeExcludedEntries(section.subscription_excluded);
+        releaseExcludedOverride(sectionName, subscriptionExcluded);
         return withProxyCore(section, routingEngine, {
           withTagSelect: true,
           code: selector?.code || sectionName,
@@ -5071,6 +5793,7 @@ async function getDashboardSections(options = {}) {
           latencyTestCodes,
           proxyConfigType,
           subscriptionSourceCount,
+          subscriptionExcluded,
           subscriptionMetadata,
           outbounds
         });
@@ -5143,6 +5866,7 @@ async function getDashboardSections(options = {}) {
           badges: outboundBadges("OpenConnect", openConnectProtocolLabel(client)),
           selected: false,
           canCopyLink: false,
+          excludeKey: client?.[".name"] ? `openconnect:${client[".name"]}` : "",
           runtimeAvailable: true
         };
       });
@@ -5170,6 +5894,7 @@ async function getDashboardSections(options = {}) {
           badges: outboundBadges("OpenVPN", openVpnProtocolLabel(client)),
           selected: false,
           canCopyLink: false,
+          excludeKey: client?.[".name"] ? `openvpn:${client[".name"]}` : "",
           runtimeAvailable: true
         };
       });
@@ -6762,7 +7487,7 @@ async function fetchDashboardSectionsOnce(mountId) {
         ...current,
         loading: false,
         failed: false,
-        data: keepOpenConnectDelays(keepStableDashboardSections(current.data, data))
+        data: keepProbeAnswers(keepOpenConnectDelays(keepStableDashboardSections(current.data, data)))
       }
     });
     return true;
@@ -7475,7 +8200,7 @@ function paintPingButtons() {
   document.querySelectorAll("[data-ping-tag]").forEach((button) => {
     const tag = button.getAttribute("data-ping-tag") || "";
     const running = Boolean(outboundProbeRunning[tag]);
-    button.textContent = running ? "…" : _("Forkop ping");
+    button.textContent = "";
     button.disabled = running;
   });
 }
@@ -7517,6 +8242,7 @@ async function handleProbeOutbound(section, outbound) {
 }
 function applyLatencyProbeToSection(sectionName, tag, delay, alive) {
   noteOpenConnectDelay(tag, alive ? delay : 0);
+  rememberProbeAnswer(tag, alive ? delay : 0, alive ? "alive" : "dead");
   const sectionsWidget = store.get().sectionsWidget;
   const data = sectionsWidget.data.map((section) => {
     if (section.sectionName !== sectionName) {
@@ -7833,6 +8559,127 @@ function handleShowUrlTestInfo(outbound) {
   ui.showModal(
     `${_("URLTest details")}: ${outbound.urlTestInfo.displayName || outbound.displayName}`,
     renderUrlTestInfoModal(outbound)
+  );
+}
+function renderBalancerMemberRows(info) {
+  return info.outbounds.length ? info.outbounds.map(
+    (member) => E(
+      "div",
+      {
+        class: [
+          "fkp_dashboard-page__urltest-details__row",
+          member.selected ? "fkp_dashboard-page__urltest-details__row--active" : ""
+        ].filter(Boolean).join(" ")
+      },
+      [
+        E(
+          "div",
+          { class: "fkp_dashboard-page__urltest-details__row-name" },
+          [
+            E("b", {}, renderDetailsMemberName(member)),
+            ...member.type ? [
+              E(
+                "span",
+                { class: "fkp_dashboard-page__urltest-details__row-type" },
+                member.type
+              )
+            ] : []
+          ]
+        ),
+        E(
+          "div",
+          { class: "fkp_dashboard-page__urltest-details__row-meta" },
+          [
+            E(
+              "span",
+              { class: getUrlTestLatencyClass(member.latency) },
+              formatUrlTestLatency(member.latency)
+            )
+          ]
+        ),
+        member.canCopyLink ? renderUrlTestCopyButton(_("Copy proxy link"), (event) => {
+          event.preventDefault();
+          handleCopyOutbound(member);
+        }) : E("span", {
+          class: "fkp_dashboard-page__urltest-details__copy-placeholder"
+        })
+      ]
+    )
+  ) : [
+    E(
+      "div",
+      { class: "fkp_dashboard-page__urltest-details__empty" },
+      _("Node list is empty")
+    )
+  ];
+}
+function renderBalancerInfoModal(outbound) {
+  const info = outbound.balancerInfo;
+  if (!info) {
+    return E("div", {}, balancerDetailsTitle(info));
+  }
+  const fields = [
+    {
+      label: _("Selected"),
+      children: [renderUrlTestSelectedValue(info)]
+    },
+    { label: _("Probe address"), children: [renderDetailsUrl(info.url)] },
+    { label: _("Probe interval"), value: info.interval },
+    ...info.kind === "leastLoad" ? [
+      { label: _("Least load group size"), value: info.expected },
+      { label: _("Least load max RTT"), value: info.maxRtt },
+      { label: _("Least load tolerance"), value: info.tolerance }
+    ] : []
+  ];
+  return E("div", { class: "fkp_dashboard-page__urltest-details" }, [
+    E(
+      "dl",
+      { class: "fkp_dashboard-page__urltest-details__params" },
+      fields.map(
+        ({ label, value, children }) => E("div", { class: "fkp_dashboard-page__urltest-details__param" }, [
+          E("dt", {}, label),
+          E(
+            "dd",
+            {},
+            children || [E("span", {}, formatUrlTestModalValue(value))]
+          )
+        ])
+      )
+    ),
+    E("div", { class: "fkp_dashboard-page__urltest-details__outbounds" }, [
+      E(
+        "div",
+        { class: "fkp_dashboard-page__urltest-details__outbounds-title" },
+        _("Nodes")
+      ),
+      E(
+        "div",
+        { class: "fkp_dashboard-page__urltest-details__table" },
+        renderBalancerMemberRows(info)
+      )
+    ]),
+    E("div", { class: "fkp_dashboard-page__urltest-details__footer" }, [
+      E(
+        "button",
+        {
+          type: "button",
+          class: "btn cbi-button cbi-button-neutral",
+          click: () => {
+            ui.hideModal();
+          }
+        },
+        _("Close")
+      )
+    ])
+  ]);
+}
+function handleShowBalancerInfo(outbound) {
+  if (!outbound.balancerInfo) {
+    return;
+  }
+  ui.showModal(
+    `${balancerDetailsTitle(outbound.balancerInfo)}: ${outbound.balancerInfo.displayName || outbound.displayName}`,
+    renderBalancerInfoModal(outbound)
   );
 }
 function renderPrioritySelectedValue(info) {
@@ -8160,6 +9007,8 @@ async function renderSectionsWidget() {
       },
       onShowUrlTestInfo: () => {
       },
+      onShowBalancerInfo: () => {
+      },
       onShowPriorityInfo: () => {
       },
       onProbeOutbound: () => {
@@ -8214,6 +9063,9 @@ async function renderSectionsWidget() {
       },
       onShowUrlTestInfo: (outbound) => {
         handleShowUrlTestInfo(outbound);
+      },
+      onShowBalancerInfo: (outbound) => {
+        handleShowBalancerInfo(outbound);
       },
       onShowPriorityInfo: (outbound) => {
         handleShowPriorityInfo(outbound);
@@ -8555,13 +9407,13 @@ var styles = `
     display: none;
 }
 
-#cbi-${FORKOP_UCI_PACKAGE}-dashboard-_mount_node > .cbi-value-field {
+#cbi-${FORKOP_UCI_PACKAGE}-dashboard-_mount_node > .cbi-value-field,
+#cbi-${FORKOP_UCI_PACKAGE}-dashboard-_mount_node > div,
+#cbi-${FORKOP_UCI_PACKAGE}-dashboard-_mount_node > output {
     margin-left: 0;
     width: 100%;
-}
-
-#cbi-${FORKOP_UCI_PACKAGE}-dashboard-_mount_node > div {
-    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
 }
 
 #cbi-${FORKOP_UCI_PACKAGE}-dashboard > h3 {
@@ -8711,7 +9563,8 @@ var styles = `
     align-items: center;
     justify-content: flex-end;
     gap: 6px;
-    flex: 0 0 auto;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
 }
 
 .fkp_dashboard-page__outbound-section__traffic {
@@ -8756,6 +9609,46 @@ var styles = `
     height: 15px;
     display: block;
     flex: 0 0 auto;
+}
+
+.fkp_dashboard-page__excluded-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.fkp_dashboard-page__excluded-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.fkp_dashboard-page__excluded-name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.fkp_dashboard-page .btn.dashboard-sections-grid-item-test-latency.dashboard-hide-dead {
+    white-space: nowrap;
+}
+
+.dashboard-hide-dead-labels {
+    display: inline-grid;
+}
+
+.dashboard-hide-dead-labels > span {
+    grid-area: 1 / 1;
+    white-space: nowrap;
+}
+
+.dashboard-hide-dead-labels > span.is-hidden {
+    visibility: hidden;
+}
+
+.fkp_dashboard-page .btn.dashboard-sections-grid-item-test-latency.is-active {
+    box-shadow: inset 0 0 0 1px currentColor;
 }
 
 .fkp_dashboard-page .btn.dashboard-sections-grid-item-test-latency[disabled] {
@@ -9009,24 +9902,65 @@ var styles = `
     flex: 0 0 auto;
 }
 
+.fkp_dashboard-page .btn.fkp_dashboard-page__outbound-grid__item__restart-button,
+.fkp_dashboard-page .btn.fkp_dashboard-page__outbound-grid__item__ping-button {
+    width: 22px !important;
+    min-width: 22px !important;
+    max-width: 22px !important;
+    height: 22px !important;
+    min-height: 22px !important;
+    padding: 1px !important;
+    overflow: hidden;
+    font-size: 0 !important;
+    line-height: 0 !important;
+    color: transparent !important;
+}
+
+.fkp_dashboard-page .btn.fkp_dashboard-page__outbound-grid__item__ping-button {
+    --fkp-action-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M3 12h4l3-8 4 16 3-8h4' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
 .fkp_dashboard-page .btn.fkp_dashboard-page__outbound-grid__item__restart-button {
-    width: 46px;
-    min-width: 46px;
-    padding: 0 4px;
-    font-size: 11px;
-    font-weight: 700;
+    --fkp-action-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3v7' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3Cpath d='M7.5 6.5a7 7 0 1 0 9 0' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+.fkp_dashboard-page .btn.fkp_dashboard-page__outbound-grid__item__ping-button::before,
+.fkp_dashboard-page .btn.fkp_dashboard-page__outbound-grid__item__restart-button::before {
+    content: "";
+    display: block;
+    width: 13px;
+    height: 13px;
+    flex: 0 0 auto;
+    box-sizing: border-box;
+    background: CanvasText;
+    -webkit-mask: var(--fkp-action-icon) center / contain no-repeat;
+    mask: var(--fkp-action-icon) center / contain no-repeat;
+}
+
+.fkp_dashboard-page .btn.fkp_dashboard-page__outbound-grid__item__ping-button:disabled::before,
+.fkp_dashboard-page .btn.fkp_dashboard-page__outbound-grid__item__restart-button:disabled::before {
+    -webkit-mask: none;
+    mask: none;
+    background: none;
+    border: 2px solid CanvasText;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: fkp-dashboard-action-spin 1s linear infinite;
+}
+
+@keyframes fkp-dashboard-action-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .fkp_dashboard-page .btn.fkp_dashboard-page__outbound-grid__item__ping-button:disabled::before,
+    .fkp_dashboard-page .btn.fkp_dashboard-page__outbound-grid__item__restart-button:disabled::before {
+        animation: none;
+    }
 }
 
 .fkp_dashboard-page .btn.fkp_dashboard-page__outbound-grid__item__restart-button.is-off {
     opacity: 0.55;
-}
-
-.fkp_dashboard-page .btn.fkp_dashboard-page__outbound-grid__item__ping-button {
-    width: 46px;
-    min-width: 46px;
-    padding: 0 4px;
-    font-size: 11px;
-    font-weight: 700;
 }
 
 .fkp_dashboard-page__outbound-grid__item__footer {

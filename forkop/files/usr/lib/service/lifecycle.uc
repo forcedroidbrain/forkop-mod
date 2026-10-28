@@ -588,6 +588,18 @@ function dnsmasq_restore_fail_safe() {
     return dns_apply_status([ "failsafe-restore" ]);
 }
 
+function sync_excluded_dns() {
+    if (!dns_apply_success([ "sync-excluded" ])) {
+        log_message("Failed to start DNS for fully excluded devices", "warn");
+        return 1;
+    }
+    if (!module_success(NFT_UC, [ "nft-load-excluded-dns-upstreams", NFT_TABLE_NAME ])) {
+        log_message("Failed to publish provider DNS addresses for fully excluded devices", "warn");
+        return 1;
+    }
+    return 0;
+}
+
 function dnsmasq_has_forkop_managed_state() {
     return dns_apply_success([ "has-managed-state" ]);
 }
@@ -817,6 +829,8 @@ function start_main() {
     else
         log_message("nftables runtime applied", "info");
 
+    sync_excluded_dns();
+
     if (!module_success(NFT_UC, [ "nft-write-xray-nftset-conf", NFT_TABLE_NAME ]))
         log_message("dnsmasq nftset conf for Xray was not written; continuing", "warn");
 
@@ -983,6 +997,8 @@ function start_impl() {
             return status;
     }
 
+    sync_excluded_dns();
+
     if (!config_set(CONFIG_NAME + ".settings.shutdown_correctly", "0"))
         return 1;
 
@@ -1028,6 +1044,8 @@ function stop_main() {
 
     if (command_success_from_args([ "nft", "list", "table", "inet", NFT_TABLE_NAME ]))
         command_success_from_args([ "nft", "delete", "table", "inet", NFT_TABLE_NAME ]);
+
+    dns_apply_success([ "stop-excluded" ]);
 
     if (module_success(NFT_UC, [ "tproxy-marking-rule4-present", RT_TABLE_NAME, NFT_FAKEIP_MARK ]))
         command_success_from_args([ "ip", "-4", "rule", "del", "fwmark", NFT_FAKEIP_MARK + "/" + NFT_FAKEIP_MARK, "table", RT_TABLE_NAME, "priority", "105" ]);
@@ -1128,6 +1146,7 @@ function start() {
     }
 
     clear_start_busy();
+    module_success(STATE_UC, [ "run-pending-reload-if-requested", PENDING_RELOAD_FILE, SERVICE_INIT ]);
     module_success(SLOTS_UC, [ "sync-scheduler" ]);
     return 0;
 }
@@ -1170,7 +1189,9 @@ function stop_impl() {
 }
 
 function stop() {
-    return stop_impl();
+    let status = stop_impl();
+    clear_stop_busy();
+    return status;
 }
 
 function restart_runtime_for_reload() {
@@ -1562,6 +1583,8 @@ function reload(reason) {
             return abort_reload(status, true);
         module_success(STATE_UC, [ "capture-reload-state", RELOAD_STATE_SNAPSHOT_FILE, as_string(RELOAD_STATE_FORMAT) ]);
     }
+
+    sync_excluded_dns();
 
     if (plan.needs_cron_refresh == 1) {
         status = refresh_cron();

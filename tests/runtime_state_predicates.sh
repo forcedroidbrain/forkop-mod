@@ -562,6 +562,8 @@ JSON
 cat >"$WORK_DIR/sing-box-signature.expected" <<'EOF_SING_BOX_SIG'
 [settings.routing_engine]
 sing-box
+[settings.routing_excluded_dns]
+provider
 [settings.dns_type]
 tcp
 [settings.dns_certificate_name]
@@ -578,6 +580,8 @@ prefer_ipv6
 60s
 [settings.dns_check_timeout]
 2s
+[settings.dns_switch_failures]
+3
 [settings.dns_detour_enabled]
 0
 [settings.dns_rewrite_ttl]
@@ -618,6 +622,8 @@ secret
 proxy
 [rule.proxy1.proxy_core]
 sing-box
+[rule.proxy1.reality_new_xray]
+0
 [rule.proxy1.connection_urls]
 [ "vless://one", "vless://two" ]
 [rule.proxy1.subscription_urls]
@@ -720,6 +726,8 @@ local.lst
 outbound
 [rule.out1.proxy_core]
 sing-box
+[rule.out1.reality_new_xray]
+0
 [rule.out1.connection_urls]
 [ ]
 [rule.out1.subscription_urls]
@@ -844,6 +852,8 @@ byedpi
 vpn
 [rule.vpn1.proxy_core]
 sing-box
+[rule.vpn1.reality_new_xray]
+0
 [rule.vpn1.connection_urls]
 [ ]
 [rule.vpn1.subscription_urls]

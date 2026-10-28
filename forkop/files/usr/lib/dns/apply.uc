@@ -8,6 +8,11 @@ const SB_DNS_INBOUND_ADDRESS = getenv("SB_DNS_INBOUND_ADDRESS") || "127.0.0.42";
 const DNSMASQ_INIT = getenv("DNSMASQ_INIT") || "/etc/init.d/dnsmasq";
 const HTTPS_FILTER_CONF = getenv("FORKOP_DNSMASQ_HTTPS_CONF") || "/tmp/dnsmasq.d/forkop-filter-rr.conf";
 const XRAY_NFTSET_CONF = getenv("FORKOP_DNSMASQ_NFTSET_CONF") || "/tmp/dnsmasq.d/forkop-xray-nftset.conf";
+const EXCLUDED_DNS_PORT = getenv("FORKOP_EXCLUDED_DNS_PORT") || "1607";
+const EXCLUDED_DNS_DIR = getenv("FORKOP_RUNTIME_STATE_DIR") || "/var/run/forkop";
+const EXCLUDED_DNS_CONF = getenv("FORKOP_EXCLUDED_DNS_CONF") || (EXCLUDED_DNS_DIR + "/excluded-dns.conf");
+const EXCLUDED_DNS_PID = getenv("FORKOP_EXCLUDED_DNS_PID") || (EXCLUDED_DNS_DIR + "/excluded-dns.pid");
+const EXCLUDED_DNS_UPSTREAMS = getenv("FORKOP_EXCLUDED_DNS_UPSTREAMS") || (EXCLUDED_DNS_DIR + "/excluded-dns-upstreams.txt");
 
 function as_string(value) {
     return value == null ? "" : "" + value;
@@ -344,6 +349,211 @@ function failsafe_restore() {
     return true;
 }
 
+function excluded_dns_skip_address(address) {
+    address = lc(trim(as_string(address)));
+    return address == "" ||
+        address == lc(SB_DNS_INBOUND_ADDRESS) ||
+        address == "127.0.0.1" ||
+        address == "0.0.0.0" ||
+        address == "::" ||
+        address == "::1";
+}
+
+function excluded_dns_token_address(token) {
+    token = trim(as_string(token));
+    if (token == "")
+        return "";
+    if (substr(token, 0, 1) == "/") {
+        let parts = split(token, "/");
+        token = trim(as_string(parts[length(parts) - 1]));
+    }
+    let at = index(token, "@");
+    if (at >= 0)
+        token = substr(token, 0, at);
+    if (substr(token, 0, 1) == "[") {
+        let end = index(token, "]");
+        if (end > 1)
+            token = substr(token, 1, end - 1);
+        else
+            return "";
+    }
+    let hash = index(token, "#");
+    if (hash >= 0)
+        token = substr(token, 0, hash);
+    token = trim(token);
+    if (match(token, /^[0-9]+(\.[0-9]+){3}$/) == null && index(token, ":") < 0)
+        return "";
+    if (excluded_dns_skip_address(token))
+        return "";
+    return token;
+}
+
+function excluded_dns_push_unique(result, seen, address) {
+    address = excluded_dns_token_address(address);
+    if (address == "" || seen[address])
+        return;
+    seen[address] = true;
+    push(result, address);
+}
+
+function excluded_dns_addresses_from_words(values) {
+    let result = [];
+    let seen = {};
+    for (let value in values)
+        excluded_dns_push_unique(result, seen, value);
+    return result;
+}
+
+function excluded_dns_resolv_addresses(path) {
+    let result = [];
+    let seen = {};
+    let text = "";
+    try {
+        text = fs.readfile(path);
+    }
+    catch (e) {
+        text = "";
+    }
+    if (text == null)
+        text = "";
+    for (let line in split(as_string(text), "\n")) {
+        line = trim(line);
+        let nameserver = match(line, /^nameserver[ \t]+([^ \t#]+)/);
+        if (nameserver == null)
+            continue;
+        excluded_dns_push_unique(result, seen, nameserver[1]);
+    }
+    return result;
+}
+
+function excluded_dns_configured_addresses() {
+    let saved = excluded_dns_addresses_from_words(words(uci_get("dhcp.@dnsmasq[0].forkop_server")));
+    if (length(saved) > 0)
+        return saved;
+
+    let current = excluded_dns_addresses_from_words(words(uci_get("dhcp.@dnsmasq[0].server")));
+    if (length(current) > 0)
+        return current;
+
+    for (let path in [
+        "/tmp/resolv.conf.d/resolv.conf.auto",
+        "/tmp/resolv.conf.auto",
+        "/etc/resolv.conf"
+    ]) {
+        let found = excluded_dns_resolv_addresses(path);
+        if (length(found) > 0)
+            return found;
+    }
+    return [];
+}
+
+function excluded_dns_has_clients() {
+    if (lc(trim(as_string(uci_get(CONFIG_NAME + ".settings.routing_excluded_dns")))) == "engine")
+        return false;
+    return trim(as_string(uci_get(CONFIG_NAME + ".settings.routing_excluded_ips"))) != "";
+}
+
+function excluded_dns_pid_alive() {
+    let pid = "";
+    try {
+        pid = trim(as_string(fs.readfile(EXCLUDED_DNS_PID)));
+    }
+    catch (e) {
+        return false;
+    }
+    if (match(pid, /^[0-9]+$/) == null)
+        return false;
+    return system("kill -0 " + pid + " >/dev/null 2>&1") == 0;
+}
+
+function excluded_dns_stop() {
+    let pid = "";
+    try {
+        pid = trim(as_string(fs.readfile(EXCLUDED_DNS_PID)));
+    }
+    catch (e) {
+        pid = "";
+    }
+    if (match(pid, /^[0-9]+$/) != null)
+        system("kill " + pid + " >/dev/null 2>&1");
+    system("rm -f " + shell_quote(EXCLUDED_DNS_PID) + " >/dev/null 2>&1");
+    return true;
+}
+
+function excluded_dns_write_upstreams(addresses) {
+    system("mkdir -p " + shell_quote(EXCLUDED_DNS_DIR) + " >/dev/null 2>&1");
+    let body = length(addresses) == 0 ? "" : join("\n", addresses) + "\n";
+    return fs.writefile(EXCLUDED_DNS_UPSTREAMS, body) != null;
+}
+
+function excluded_dns_config_text(addresses, with_ipv6) {
+    let lines = [
+        "port=" + EXCLUDED_DNS_PORT,
+        "bind-interfaces",
+        "listen-address=0.0.0.0",
+        "no-hosts",
+        "no-resolv",
+        "cache-size=150"
+    ];
+    if (with_ipv6)
+        push(lines, "listen-address=::");
+    for (let address in addresses) {
+        if (index(address, ":") >= 0)
+            push(lines, "server=[" + address + "]");
+        else
+            push(lines, "server=" + address);
+    }
+    return join("\n", lines) + "\n";
+}
+
+function excluded_dns_start(config_text) {
+    if (fs.writefile(EXCLUDED_DNS_CONF, config_text) == null)
+        return false;
+    excluded_dns_stop();
+    return system(
+        "dnsmasq --conf-file=" + shell_quote(EXCLUDED_DNS_CONF) +
+        " --pid-file=" + shell_quote(EXCLUDED_DNS_PID) +
+        " >/dev/null 2>&1"
+    ) == 0;
+}
+
+function excluded_dns_sync() {
+    if (!excluded_dns_has_clients()) {
+        excluded_dns_stop();
+        excluded_dns_write_upstreams([]);
+        system("rm -f " + shell_quote(EXCLUDED_DNS_CONF) + " >/dev/null 2>&1");
+        return true;
+    }
+
+    let addresses = excluded_dns_configured_addresses();
+    if (!excluded_dns_write_upstreams(addresses))
+        return false;
+    if (length(addresses) == 0) {
+        log("Excluded devices are set, but no provider DNS address was found", "warn");
+        excluded_dns_stop();
+        return true;
+    }
+
+    let config_text = excluded_dns_config_text(addresses, true);
+    let previous = "";
+    try {
+        previous = as_string(fs.readfile(EXCLUDED_DNS_CONF));
+    }
+    catch (e) {
+        previous = "";
+    }
+    if (previous == config_text && excluded_dns_pid_alive())
+        return true;
+
+    log("Starting DNS for fully excluded devices on port " + EXCLUDED_DNS_PORT, "info");
+    if (excluded_dns_start(config_text))
+        return true;
+
+    config_text = excluded_dns_config_text(addresses, false);
+    log("Excluded DNS retry without IPv6 listen", "warn");
+    return excluded_dns_start(config_text);
+}
+
 let mode = ARGV[0] || "";
 
 if (mode == "configure")
@@ -358,6 +568,15 @@ else if (mode == "has-managed-state")
     exit(dnsmasq_has_forkop_managed_state() ? 0 : 1);
 else if (mode == "default-config-complete")
     exit(dnsmasq_default_config_is_complete() ? 0 : 1);
+else if (mode == "sync-excluded")
+    exit(excluded_dns_sync() ? 0 : 1);
+else if (mode == "stop-excluded")
+    exit(excluded_dns_stop() ? 0 : 1);
+else if (mode == "parse-excluded-upstreams") {
+    for (let address in excluded_dns_addresses_from_words(words(ARGV[1])))
+        print(address + "\n");
+    exit(0);
+}
 
-warn("Usage: dns/apply.uc <configure|restore|failsafe-restore|has-forkop-dns|has-managed-state|default-config-complete>\n");
+warn("Usage: dns/apply.uc <configure|restore|failsafe-restore|has-forkop-dns|has-managed-state|default-config-complete|sync-excluded|stop-excluded|parse-excluded-upstreams>\n");
 exit(1);

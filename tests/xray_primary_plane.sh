@@ -332,6 +332,8 @@ extract_fn "$XRAY_GEN" "collect_fake_dns_domains" | grep -Fq 'bypass' ||
   fail "BYPASS must be excluded from FakeDNS so rustore is a real IP for freedom"
 extract_fn "$XRAY_GEN" "collect_fake_dns_domains" | grep -Fq 'claimed' ||
   fail "DNS-action domains (AdGuard youtube) must not be swallowed by FakeDNS"
+extract_fn "$XRAY_GEN" "collect_routed_dns_domains" | grep -Fq 'dns_answer' ||
+  fail "DNS answer route must return FakeIP while the section server stays for dialing"
 extract_fn "$XRAY_GEN" "collect_fake_dns_domains" | grep -Fq 'block' ||
   fail "FakeDNS must include BLOCK domains so 2ip.ru is not routed as a Hetzner IP"
 extract_fn "$XRAY_GEN" "empty_config" | grep -Fq '"AsIs"' ||

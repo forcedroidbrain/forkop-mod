@@ -673,7 +673,7 @@ function createSettingsContent(section, capabilities) {
   o = section.option(
     form.Value,
     "dns_certificate_name",
-    _("Certificate name"),
+    _("DNS server certificate name"),
     _(
       "Name on the certificate when the server is a custom IP, for example dns.example.net. A hostname or a preset from the list does not need this.",
     ),
@@ -714,6 +714,26 @@ function createSettingsContent(section, capabilities) {
     _("How often to check the active DNS servers."),
   );
   configureDnsDuration(o, "10s", dnsOption, bootstrapOption);
+  restrictRoutingEngine(o, "sing-box");
+
+  o = section.option(
+    form.Value,
+    "dns_switch_failures",
+    _("DNS switch failures"),
+    _(
+      "How many checks in a row must fail before moving to the next DNS server. 1 switches on the first failure.",
+    ),
+  );
+  o.default = "3";
+  o.rmempty = false;
+  o.validate = function (_section_id, value) {
+    const count = Number(`${value || ""}`.trim());
+    if (!/^[0-9]+$/.test(`${value || ""}`.trim()) || count < 1 || count > 10) {
+      return _("Enter a whole number from 1 to 10");
+    }
+    return true;
+  };
+  configureDnsFailoverVisibility(o, dnsOption, bootstrapOption);
   restrictRoutingEngine(o, "sing-box");
 
   o = section.option(
@@ -825,7 +845,7 @@ function createSettingsContent(section, capabilities) {
     "routing_excluded_ips",
     _("Completely excluded devices"),
     _(
-      "Devices and subnets in this list are fully excluded from Forkop: no tproxy mark, no FakeIP DNS, traffic goes as if Forkop were stopped.",
+      "Devices and subnets in this list are fully excluded from Forkop: no tproxy mark, traffic goes as if Forkop were stopped.",
     ),
   );
   o.placeholder = _("Device or IP");
@@ -864,6 +884,19 @@ function createSettingsContent(section, capabilities) {
       cfgvalue,
     );
   };
+
+  o = section.option(
+    form.ListValue,
+    "routing_excluded_dns",
+    _("DNS for excluded devices"),
+    _(
+      "Provider: queries to the router use the DNS configured before Forkop, or the provider DNS from WAN. A DNS server set on the device itself is not intercepted. Engine: those queries go to Xray or sing-box and the answer is a real address, not FakeIP.",
+    ),
+  );
+  o.value("provider", _("Provider DNS"));
+  o.value("engine", _("Engine DNS"));
+  o.default = "provider";
+  o.rmempty = false;
 
   o = section.option(
     form.Flag,

@@ -173,6 +173,8 @@ require_contains "$FORKOP_LIB/xray/constants.uc" 'XRAY_TPROXY_PORT = 1602' \
   "xray plane must reuse tproxy port 1602"
 require_contains "$FORKOP_LIB/xray/constants.uc" 'SINGBOX_SIDECAR_PORT = 4536' \
   "xray plane must SOCKS into sing-box on 4536"
+require_contains "$CONNECTIONS_UC" 'is_xray_primary() ? 3 : 2' \
+  "subscription download proxies must not bind the sing-box entrance on 4536"
 require_contains "$FORKOP_LIB/xray/constants.uc" 'FREEDOM_TAG = "direct"' \
   "xray freedom outbound tag must be defined"
 require_contains "$FORKOP_LIB/xray/constants.uc" 'BLACKHOLE_TAG = "block"' \
@@ -398,8 +400,8 @@ require_contains "$FORKOP_LIB/xray/constants.uc" 'XRAY_NODE_PORT_BASE = 11008' \
   "each xray share-link must get its own SOCKS port from 11008"
 require_contains "$FORKOP_LIB/xray/constants.uc" 'XRAY_NODES_FILE' \
   "xray generator must write a per-node sidecar map"
-require_contains "$FORKOP_LIB/xray/generator.uc" 'node_inbound_tag' \
-  "xray must emit a SOCKS inbound per outbound so the dashboard can select it"
+require_contains "$FORKOP_LIB/xray/generator.uc" 'subscription_links[tag] || manual_links[tag]' \
+  "xray nodes must keep a manual share link for the dashboard copy button"
 require_contains "$GENERATOR_UC" 'function read_xray_section_nodes' \
   "sing-box sidecar must still read xray nodes for dashboard metadata"
 require_contains "$GENERATOR_UC" 'xray-nodes.json' \

@@ -17,6 +17,10 @@ const DNS_SOURCE_SET = "forkop_dns_sources";
 const DNS_SOURCE6_SET = "forkop_dns_sources6";
 const EXCLUDED_SOURCE_SET = "forkop_excluded_sources";
 const EXCLUDED_SOURCE6_SET = "forkop_excluded_sources6";
+const EXCLUDED_DNS_UPSTREAM_SET = "forkop_excluded_dns";
+const EXCLUDED_DNS_UPSTREAM6_SET = "forkop_excluded_dns6";
+const EXCLUDED_DNS_PORT = "1607";
+const EXCLUDED_DNS_UPSTREAMS_FILE = getenv("FORKOP_EXCLUDED_DNS_UPSTREAMS") || "/var/run/forkop/excluded-dns-upstreams.txt";
 
 let common_read_json_file = common.read_json_file;
 let list_option = common.list_option;
@@ -1098,7 +1102,7 @@ function xray_disable_quic_needed() {
     return bool_option(uci_settings(), "disable_quic", false);
 }
 
-function nft_create_runtime_base(table, localv4_set, common_set, port_set, ip_port_set, interface_set, source_interfaces, fakeip_mark, outbound_mark, fakeip_range, tproxy_port, exclude_ntp, localv6_set, common6_set, ip_port6_set, fakeip6_range, tproxy6_address, skip_output_tproxy) {
+function nft_create_runtime_base(table, localv4_set, common_set, port_set, ip_port_set, interface_set, source_interfaces, fakeip_mark, outbound_mark, fakeip_range, tproxy_port, exclude_ntp, localv6_set, common6_set, ip_port6_set, fakeip6_range, tproxy6_address, skip_output_tproxy, excluded_dns_mode) {
     localv6_set = default_arg(localv6_set, "localv6");
     common6_set = default_arg(common6_set, "forkop_subnets6");
     ip_port6_set = default_arg(ip_port6_set, "forkop_ip6_ports");
@@ -1120,6 +1124,8 @@ function nft_create_runtime_base(table, localv4_set, common_set, port_set, ip_po
         !nft_create_ipv6_set(table, DNS_SOURCE6_SET) ||
         !nft_create_ipv4_set(table, EXCLUDED_SOURCE_SET) ||
         !nft_create_ipv6_set(table, EXCLUDED_SOURCE6_SET) ||
+        !nft_create_ipv4_set(table, EXCLUDED_DNS_UPSTREAM_SET) ||
+        !nft_create_ipv6_set(table, EXCLUDED_DNS_UPSTREAM6_SET) ||
         !nft_create_ifname_set(table, interface_set))
         return false;
 
@@ -1133,6 +1139,21 @@ function nft_create_runtime_base(table, localv4_set, common_set, port_set, ip_po
         !nft_create_priority_chains(table) ||
         !nft_create_chain(table, "proxy", "{ type filter hook prerouting priority -100; policy accept; }"))
         return false;
+
+    if (lc(as_string(excluded_dns_mode)) == "engine-xray") {
+        if (!nft_add_rule(table, "dns_redirect", [ "iifname", "@" + as_string(interface_set), "ip", "saddr", "@" + EXCLUDED_SOURCE_SET, "tcp", "dport", "53", "counter", "redirect", "to", ":" + as_string(xray_constants.XRAY_DNS_EXCLUDED_PORT) ]) ||
+            !nft_add_rule(table, "dns_redirect", [ "iifname", "@" + as_string(interface_set), "ip", "saddr", "@" + EXCLUDED_SOURCE_SET, "udp", "dport", "53", "counter", "redirect", "to", ":" + as_string(xray_constants.XRAY_DNS_EXCLUDED_PORT) ]) ||
+            !nft_add_rule(table, "dns_redirect", [ "iifname", "@" + as_string(interface_set), "ip6", "saddr", "@" + EXCLUDED_SOURCE6_SET, "tcp", "dport", "53", "counter", "redirect", "to", ":" + as_string(xray_constants.XRAY_DNS_EXCLUDED_PORT) ]) ||
+            !nft_add_rule(table, "dns_redirect", [ "iifname", "@" + as_string(interface_set), "ip6", "saddr", "@" + EXCLUDED_SOURCE6_SET, "udp", "dport", "53", "counter", "redirect", "to", ":" + as_string(xray_constants.XRAY_DNS_EXCLUDED_PORT) ]))
+            return false;
+    }
+    else if (lc(as_string(excluded_dns_mode)) != "engine") {
+        if (!nft_add_rule(table, "dns_redirect", [ "iifname", "@" + as_string(interface_set), "ip", "saddr", "@" + EXCLUDED_SOURCE_SET, "ip", "daddr", "@" + as_string(localv4_set), "tcp", "dport", "53", "counter", "redirect", "to", ":" + EXCLUDED_DNS_PORT ]) ||
+            !nft_add_rule(table, "dns_redirect", [ "iifname", "@" + as_string(interface_set), "ip", "saddr", "@" + EXCLUDED_SOURCE_SET, "ip", "daddr", "@" + as_string(localv4_set), "udp", "dport", "53", "counter", "redirect", "to", ":" + EXCLUDED_DNS_PORT ]) ||
+            !nft_add_rule(table, "dns_redirect", [ "iifname", "@" + as_string(interface_set), "ip6", "saddr", "@" + EXCLUDED_SOURCE6_SET, "ip6", "daddr", "@" + as_string(localv6_set), "tcp", "dport", "53", "counter", "redirect", "to", ":" + EXCLUDED_DNS_PORT ]) ||
+            !nft_add_rule(table, "dns_redirect", [ "iifname", "@" + as_string(interface_set), "ip6", "saddr", "@" + EXCLUDED_SOURCE6_SET, "ip6", "daddr", "@" + as_string(localv6_set), "udp", "dport", "53", "counter", "redirect", "to", ":" + EXCLUDED_DNS_PORT ]))
+            return false;
+    }
 
     if (!nft_add_rule(table, "dns_redirect", [ "iifname", "@" + as_string(interface_set), "ip", "saddr", "@" + DNS_SOURCE_SET, "tcp", "dport", "53", "counter", "redirect", "to", ":" + as_string(runtime_constants.SOURCE_DNS_INBOUND_PORT) ]) ||
         !nft_add_rule(table, "dns_redirect", [ "iifname", "@" + as_string(interface_set), "ip", "saddr", "@" + DNS_SOURCE_SET, "udp", "dport", "53", "counter", "redirect", "to", ":" + as_string(runtime_constants.SOURCE_DNS_INBOUND_PORT) ]) ||
@@ -1174,7 +1195,11 @@ function nft_create_runtime_base(table, localv4_set, common_set, port_set, ip_po
         !nft_add_rule(table, "proxy", [ "meta", "mark", "&", fakeip_mark, "==", fakeip_mark, "meta", "l4proto", "udp", "tproxy", "ip6", "to", core_ip.format_ipv6_tproxy_target(tproxy6_address, tproxy_port), "counter" ]) ||
         !nft_add_rule(table, "mangle_output", [ "ip", "daddr", "@" + as_string(localv4_set), "return" ]) ||
         !nft_add_rule(table, "mangle_output", [ "ip6", "daddr", "@" + as_string(localv6_set), "ip6", "daddr", "!=", fakeip6_range, "return" ]) ||
-        !nft_add_rule(table, "mangle_output", [ "meta", "mark", outbound_mark, "counter", "return" ]))
+        !nft_add_rule(table, "mangle_output", [ "meta", "mark", outbound_mark, "counter", "return" ]) ||
+        !nft_add_rule(table, "mangle_output", [ "ip", "daddr", "@" + EXCLUDED_DNS_UPSTREAM_SET, "tcp", "dport", "53", "meta", "mark", "set", outbound_mark, "return" ]) ||
+        !nft_add_rule(table, "mangle_output", [ "ip", "daddr", "@" + EXCLUDED_DNS_UPSTREAM_SET, "udp", "dport", "53", "meta", "mark", "set", outbound_mark, "return" ]) ||
+        !nft_add_rule(table, "mangle_output", [ "ip6", "daddr", "@" + EXCLUDED_DNS_UPSTREAM6_SET, "tcp", "dport", "53", "meta", "mark", "set", outbound_mark, "return" ]) ||
+        !nft_add_rule(table, "mangle_output", [ "ip6", "daddr", "@" + EXCLUDED_DNS_UPSTREAM6_SET, "udp", "dport", "53", "meta", "mark", "set", outbound_mark, "return" ]))
         return false;
 
     if (xray_list_catch_all_needed()) {
@@ -1220,7 +1245,10 @@ function nft_create_runtime_base_from_uci(table, localv4_set, common_set, port_s
         ip_port6_set,
         fakeip6_range,
         tproxy6_address,
-        router_output_intercept_enabled(settings) ? "1" : "0"
+        router_output_intercept_enabled(settings) ? "1" : "0",
+        (lc(option(settings, "routing_excluded_dns", "provider")) == "engine" && engine.is_xray_primary())
+            ? "engine-xray"
+            : option(settings, "routing_excluded_dns", "provider")
     );
 }
 
@@ -1792,6 +1820,9 @@ function nft_runtime_signature_from_settings_and_sections(settings, sections) {
     body = signature_add_value(body, "settings.exclude_ntp", bool_option(settings, "exclude_ntp", false) ? "1" : "0");
     body = signature_add_value(body, "settings.exclude_bittorrent", bool_option(settings, "exclude_bittorrent", false) ? "1" : "0");
     body = signature_add_value(body, "settings.routing_excluded_ips", option(settings, "routing_excluded_ips", ""));
+    body = signature_add_value(body, "settings.routing_excluded_dns", option(settings, "routing_excluded_dns", "provider"));
+    let engine_name = lc(option(settings, "routing_engine", ""));
+    body = signature_add_value(body, "settings.routing_engine", (engine_name == "xray" || engine_name == "xray-core") ? "xray" : "sing-box");
     body = signature_add_value(body, "settings.route_router_traffic", intercept ? "1" : "0");
     if (intercept)
         body = signature_add_value(body, "settings.route_router_traffic_section", option(settings, "route_router_traffic_section", ""));
@@ -2319,10 +2350,14 @@ function source_aware_dns_values(sections, deferred_sections, settings) {
     let seen = {};
     let values = [];
 
+    let engine_dns = lc(option(object_or_empty(settings), "routing_excluded_dns", "provider")) == "engine";
+    let engine_name = lc(option(object_or_empty(settings), "routing_engine", ""));
+    let xray_plane = engine_name == "xray" || engine_name == "xray-core";
     for (let value in resolved_source_ip_values(list_option(object_or_empty(settings), "routing_excluded_ips"))) {
         if (!seen[value]) {
             seen[value] = true;
-            push(values, value);
+            if (engine_dns && !xray_plane)
+                push(values, value);
         }
     }
 
@@ -2354,6 +2389,28 @@ function source_aware_dns_values(sections, deferred_sections, settings) {
     }
 
     return values;
+}
+
+function nft_load_excluded_dns_upstreams(table) {
+    table = as_string(table);
+    if (table == "" || !nft_table_present(table))
+        return true;
+
+    run_args_quiet([ "nft", "flush", "set", "inet", table, EXCLUDED_DNS_UPSTREAM_SET ]);
+    run_args_quiet([ "nft", "flush", "set", "inet", table, EXCLUDED_DNS_UPSTREAM6_SET ]);
+
+    if (fs.stat(EXCLUDED_DNS_UPSTREAMS_FILE) == null)
+        return true;
+
+    return nft_add_file_chunks_to_family_sets(
+        EXCLUDED_DNS_UPSTREAMS_FILE,
+        table,
+        EXCLUDED_DNS_UPSTREAM_SET,
+        EXCLUDED_DNS_UPSTREAM6_SET,
+        "ips",
+        "",
+        "5000"
+    );
 }
 
 function nft_add_source_aware_dns_sources(sections, deferred_sections, table, settings) {
@@ -2617,7 +2674,7 @@ function nft_populate_runtime_sets_from_sections(sections, populate_enabled, def
         if (!nft_populate_runtime_set_for_section(section, deferred_sections, table, common_set, port_set, ip_port_set, common6_set, ip_port6_set))
             return false;
 
-    return true;
+    return nft_load_excluded_dns_upstreams(table);
 }
 
 function nft_populate_runtime_sets_from_uci(populate_enabled, deferred_section_names, table, common_set, port_set, ip_port_set, interface_set, localv4_set, mark, common6_set, ip_port6_set, localv6_set) {
@@ -2666,7 +2723,7 @@ else if (mode == "rule-ports-csv")
 else if (mode == "csv-to-lines-file")
     csv_to_lines_file(ARGV[1], ARGV[2]);
 else if (mode == "nft-create-runtime-base")
-    exit(nft_create_runtime_base(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[11], ARGV[12], ARGV[13], ARGV[14], ARGV[15], ARGV[16], ARGV[17], ARGV[18]) ? 0 : 1);
+    exit(nft_create_runtime_base(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[11], ARGV[12], ARGV[13], ARGV[14], ARGV[15], ARGV[16], ARGV[17], ARGV[18], ARGV[19]) ? 0 : 1);
 else if (mode == "nft-create-runtime-base-from-uci")
     exit(nft_create_runtime_base_from_uci(ARGV[1], ARGV[2], ARGV[3], ARGV[4], ARGV[5], ARGV[6], ARGV[7], ARGV[8], ARGV[9], ARGV[10], ARGV[11], ARGV[12], ARGV[13], ARGV[14], ARGV[15]) ? 0 : 1);
 else if (mode == "nft-create-runtime-output-rules")
@@ -2709,6 +2766,8 @@ else if (mode == "nft-runtime-signature")
     exit(nft_runtime_signature_from_uci() ? 0 : 1);
 else if (mode == "nft-runtime-signature-fixture")
     exit(nft_runtime_signature_from_fixture(ARGV[1]) ? 0 : 1);
+else if (mode == "nft-load-excluded-dns-upstreams")
+    exit(nft_load_excluded_dns_upstreams(ARGV[1]) ? 0 : 1);
 else if (mode == "nft-sync-router-output-intercept")
     exit(nft_sync_router_output_intercept(ARGV[1], ARGV[2], ARGV[3]) ? 0 : 1);
 else if (mode == "nft-enable-router-output-intercept")

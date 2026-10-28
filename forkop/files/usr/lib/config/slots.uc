@@ -308,10 +308,6 @@ function restore_control_options(snapshot) {
     uci_core.commit(CONFIG_NAME);
 }
 
-function forkop_service_running() {
-    return command_success_from_args([ SERVICE_INIT, "running" ]);
-}
-
 function start_is_busy() {
     return file_size(START_BUSY_FILE) > 0;
 }
@@ -320,25 +316,32 @@ function stop_is_busy() {
     return file_size(STOP_BUSY_FILE) > 0;
 }
 
+function queue_slot_restart() {
+    if (!ensure_dir(RUNTIME_STATE_DIR))
+        return false;
+    let lock = shell_quote(RUNTIME_STATE_DIR + "/slot-restart.lock");
+    let start_busy = shell_quote(START_BUSY_FILE);
+    let stop_busy = shell_quote(STOP_BUSY_FILE);
+    let restart = "FORKOP_SLOT_RESTART=1 " + command_from_args([ SERVICE_INIT, "restart" ]);
+    // One waiter. The config file is already the new slot; restart once the
+    // current start/stop drops both busy flags, so that run is what stays up.
+    let script =
+        "if command -v flock >/dev/null 2>&1; then exec 9>" + lock + "; flock -n 9 || exit 0; fi; " +
+        "while [ -s " + start_busy + " ] || [ -s " + stop_busy + " ]; do sleep 1; done; " +
+        "exec 9>&- 2>/dev/null || true; " +
+        restart + " >/dev/null 2>&1";
+    log_message("slot restart queued until the current start or stop finishes", "info");
+    return system(script + " 1000>&- &") == 0;
+}
+
 function restart_after_apply(mode) {
     mode = trim_string(mode);
     if (mode == "none")
         return true;
-    if (stop_is_busy()) {
-        log_message("slot restart skipped because Forkop is stopping", "info");
-        return true;
-    }
-    if (start_is_busy()) {
-        log_message("slot change saved; Forkop restart waits until the current start finishes", "info");
-        return true;
-    }
-    let action = "reload";
-    if (mode == "start" || !forkop_service_running())
-        action = "start";
-    log_message("requesting Forkop " + action + " in background after slot change", "info");
-    // Do not block LuCI / slot_apply: Xray reload can take over a minute.
-    // FORKOP_SLOT_RESTART lets a stop already in progress ignore this start.
-    return system("FORKOP_SLOT_RESTART=1 " + command_from_args([ SERVICE_INIT, action ]) + " >/dev/null 2>&1 1000>&- &") == 0;
+    if (stop_is_busy() || start_is_busy())
+        return queue_slot_restart();
+    log_message("requesting Forkop restart in background after slot change", "info");
+    return system("FORKOP_SLOT_RESTART=1 " + command_from_args([ SERVICE_INIT, "restart" ]) + " >/dev/null 2>&1 1000>&- &") == 0;
 }
 
 function apply_slot(name, reason, restart_mode) {

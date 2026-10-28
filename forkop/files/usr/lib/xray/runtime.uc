@@ -766,6 +766,50 @@ function stopped_outbounds_json() {
     return 0;
 }
 
+function enable_outbound_tag(tag, outbound) {
+    let path = "/tmp/forkop-xray-outbound.json";
+    let add_log = "/tmp/forkop-xray-ado.out";
+    let server = "127.0.0.1:" + as_string(xray_constants.XRAY_API_PORT);
+    // Current Xray reads ado files as a config document and takes the
+    // outbounds array. A bare outbound object is reported as empty.
+    let documents = [
+        { outbounds: [ outbound ] },
+        outbound
+    ];
+    let reason = "";
+    let added = 1;
+    for (let document in documents) {
+        if (write_file(path, sprintf("%J\n", document)) == null) {
+            remove_file(path);
+            return { ok: false, error: "failed to write outbound" };
+        }
+        added = xray_api_status([
+            xray_constants.XRAY_BIN, "api", "ado", "-s", server, "-t", "10", path
+        ], add_log);
+        reason = trim(read_file(add_log));
+        let folded = lower_text(reason);
+        if (added == 0 || index(folded, "already") >= 0 || index(folded, "exist") >= 0)
+            break;
+    }
+    remove_file(path);
+    if (added != 0 && index(lower_text(reason), "already") < 0 && index(lower_text(reason), "exist") < 0)
+        return { ok: false, error: reason != "" ? reason : "failed to add outbound" };
+    return { ok: true, error: "" };
+}
+
+function disable_outbound_tag(tag) {
+    let remove_log = "/tmp/forkop-xray-rmo.out";
+    let server = "127.0.0.1:" + as_string(xray_constants.XRAY_API_PORT);
+    let removed = xray_api_status([
+        xray_constants.XRAY_BIN, "api", "rmo", "-s", server, tag
+    ], remove_log);
+    if (removed != 0) {
+        let reason = trim(read_file(remove_log));
+        return { ok: false, error: reason != "" ? reason : "failed to remove outbound" };
+    }
+    return { ok: true, error: "" };
+}
+
 function restart_outbound_json(tag) {
     tag = trim(as_string(tag));
     if (tag == "" || length(tag) > 180 || index(tag, "\n") >= 0 || index(tag, "\r") >= 0 || index(tag, "\0") >= 0) {
@@ -788,37 +832,12 @@ function restart_outbound_json(tag) {
         return 1;
     }
 
-    let server = "127.0.0.1:" + as_string(xray_constants.XRAY_API_PORT);
     let turning_on = tag_is_stopped(tag);
     if (turning_on) {
-        let path = "/tmp/forkop-xray-outbound.json";
-        let add_log = "/tmp/forkop-xray-ado.out";
-        // Current Xray reads ado files as a config document and takes the
-        // outbounds array. A bare outbound object is reported as empty.
-        let documents = [
-            { outbounds: [ outbound ] },
-            outbound
-        ];
-        let reason = "";
-        let added = 1;
-        for (let document in documents) {
-            if (write_file(path, sprintf("%J\n", document)) == null) {
-                remove_file(path);
-                write_json({ success: false, error: "failed to write outbound", enabled: false, tag: tag });
-                return 1;
-            }
-            added = xray_api_status([
-                xray_constants.XRAY_BIN, "api", "ado", "-s", server, "-t", "10", path
-            ], add_log);
-            reason = trim(read_file(add_log));
-            let folded = lower_text(reason);
-            if (added == 0 || index(folded, "already") >= 0 || index(folded, "exist") >= 0)
-                break;
-        }
-        remove_file(path);
-        if (added != 0 && index(lower_text(reason), "already") < 0 && index(lower_text(reason), "exist") < 0) {
-            log_message("Failed to enable Xray outbound '" + tag + "'" + (reason != "" ? ": " + reason : ""), "error");
-            write_json({ success: false, error: reason != "" ? reason : "failed to add outbound", enabled: false, tag: tag });
+        let added = enable_outbound_tag(tag, outbound);
+        if (!added.ok) {
+            log_message("Failed to enable Xray outbound '" + tag + "'" + (added.error != "" ? ": " + added.error : ""), "error");
+            write_json({ success: false, error: added.error, enabled: false, tag: tag });
             return 1;
         }
         remember_stopped_tag(tag, false);
@@ -827,19 +846,96 @@ function restart_outbound_json(tag) {
         return 0;
     }
 
-    let remove_log = "/tmp/forkop-xray-rmo.out";
-    let removed = xray_api_status([
-        xray_constants.XRAY_BIN, "api", "rmo", "-s", server, tag
-    ], remove_log);
-    if (removed != 0) {
-        let reason = trim(read_file(remove_log));
-        write_json({ success: false, error: reason != "" ? reason : "failed to remove outbound", enabled: true, tag: tag });
+    let removed = disable_outbound_tag(tag);
+    if (!removed.ok) {
+        write_json({ success: false, error: removed.error, enabled: true, tag: tag });
         return 1;
     }
     remember_stopped_tag(tag, true);
     log_message("Disabled Xray outbound '" + tag + "'", "info");
     write_json({ success: true, tag: tag, enabled: false });
     return 0;
+}
+
+function safe_dashboard_section_name(name) {
+    name = trim(as_string(name));
+    return name != "" && length(name) <= 64 && match(name, /^[A-Za-z0-9_]+$/) != null;
+}
+
+function set_section_outbounds_json(section_name, mode) {
+    section_name = trim(as_string(section_name));
+    mode = lower_text(trim(as_string(mode)));
+    if (!safe_dashboard_section_name(section_name) || (mode != "on" && mode != "off")) {
+        write_json({ success: false, error: "invalid section" });
+        return 1;
+    }
+    if (!process_running()) {
+        write_json({ success: false, error: "xray is not running" });
+        return 1;
+    }
+
+    let nodes = array_or_empty(object_or_empty(read_nodes())[section_name]);
+    let config = read_json_object(xray_constants.XRAY_CONFIG);
+    let stopped = {};
+    for (let tag in read_stopped_tags())
+        stopped[tag] = true;
+    let changed = [];
+    let failed = [];
+    let enable = mode == "on";
+    for (let node in nodes) {
+        node = object_or_empty(node);
+        let tag = trim(as_string(node.tag || ""));
+        if (tag == "" || tag == xray_constants.XRAY_URLTEST_TAG)
+            continue;
+        if (!restartable_xray_protocol(node.protocol))
+            continue;
+        if (enable) {
+            if (!stopped[tag])
+                continue;
+            let outbound = outbound_by_tag(config, tag);
+            if (outbound == null || !restartable_xray_protocol(outbound.protocol))
+                continue;
+            let added = enable_outbound_tag(tag, outbound);
+            if (!added.ok) {
+                push(failed, tag);
+                log_message("Failed to enable Xray outbound '" + tag + "'" + (added.error != "" ? ": " + added.error : ""), "error");
+                continue;
+            }
+            delete stopped[tag];
+            push(changed, tag);
+            continue;
+        }
+        if (stopped[tag])
+            continue;
+        let outbound = outbound_by_tag(config, tag);
+        if (outbound == null || !restartable_xray_protocol(outbound.protocol))
+            continue;
+        let removed = disable_outbound_tag(tag);
+        if (!removed.ok) {
+            push(failed, tag);
+            log_message("Failed to disable Xray outbound '" + tag + "'" + (removed.error != "" ? ": " + removed.error : ""), "error");
+            continue;
+        }
+        stopped[tag] = true;
+        push(changed, tag);
+    }
+    let tags = [];
+    for (let tag, present in stopped)
+        if (present)
+            push(tags, tag);
+    write_stopped_tags(tags);
+    if (length(changed) > 0)
+        log_message((enable ? "Enabled" : "Disabled") + " " + length(changed) + " Xray outbound(s) in section '" + section_name + "'", "info");
+    write_json({
+        success: length(failed) == 0,
+        section: section_name,
+        enabled: enable,
+        tags: changed,
+        failed: failed,
+        stopped: tags,
+        error: length(failed) > 0 ? "some outbounds were not changed" : ""
+    });
+    return length(failed) == 0 ? 0 : 1;
 }
 
 function replace_routing_live(config) {
@@ -1979,6 +2075,8 @@ function nodes_with_latency() {
         }
         if (tile != null) {
             tile.protocol = strategy_name;
+            if (active_tag != "" && active_tag != xray_constants.XRAY_URLTEST_TAG)
+                tile.active = active_tag;
             if (active != null && int(active.delay || 0) > 0) {
                 tile.delay = int(active.delay || 0);
                 tile.probed = true;
@@ -2618,6 +2716,8 @@ else if (mode == "select-outbound")
     exit(select_outbound_json(ARGV[1] || "", ARGV[2] || ""));
 else if (mode == "restart-outbound")
     exit(restart_outbound_json(ARGV[1] || ""));
+else if (mode == "set-section-outbounds")
+    exit(set_section_outbounds_json(ARGV[1] || "", ARGV[2] || ""));
 else if (mode == "stopped-outbounds")
     exit(stopped_outbounds_json());
 else if (mode == "close-connection")

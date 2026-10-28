@@ -171,9 +171,16 @@ function now_seconds() {
     return int(clock()[0]);
 }
 
-const DNS_SWITCH_FAILURES = 3;
+function dns_switch_failures(cfg) {
+    let value = int(common.option(cfg, "dns_switch_failures", "3"));
+    if (value < 1)
+        return 1;
+    if (value > 10)
+        return 10;
+    return value;
+}
 
-function hold_dns_switch(pending, kind, selected, state) {
+function hold_dns_switch(pending, kind, selected, state, failures) {
     let key = kind == "main" ? "main_index" : "bootstrap_index";
     let current = int(state[key] || 0);
     selected = common.object_or_empty(selected);
@@ -182,9 +189,9 @@ function hold_dns_switch(pending, kind, selected, state) {
         return selected;
     }
     pending[kind] = int(pending[kind] || 0) + 1;
-    if (pending[kind] < DNS_SWITCH_FAILURES) {
+    if (pending[kind] < failures) {
         if (pending[kind] == 1)
-            log_message(kind + " DNS check failed; switching only after " + as_string(DNS_SWITCH_FAILURES) + " consecutive failures", "info");
+            log_message(kind + " DNS check failed; switching only after " + as_string(failures) + " consecutive failures", "info");
         return { index: current, reason: "hold", alive: selected.alive };
     }
     pending[kind] = 0;
@@ -274,17 +281,18 @@ function worker() {
     while (true) {
         let now = now_seconds();
         let current_cfg = settings();
+        let switch_failures = dns_switch_failures(current_cfg);
         if (!runtime_dns.state_matches(runtime_dns.state_template(current_cfg), state))
             return 0;
 
         if (now >= next_active) {
-            let bootstrap = hold_dns_switch(pending, "bootstrap", choose_index("bootstrap", state, int(state.bootstrap_index), timeout_seconds, false), state);
+            let bootstrap = hold_dns_switch(pending, "bootstrap", choose_index("bootstrap", state, int(state.bootstrap_index), timeout_seconds, false), state, switch_failures);
             if (!bootstrap.alive && !all_down.bootstrap)
                 log_message("all configured bootstrap DNS servers are unavailable", "warn");
             all_down.bootstrap = !bootstrap.alive;
 
             if (bootstrap.index != int(state.bootstrap_index)) {
-                let main = hold_dns_switch(pending, "main", choose_index("main", state, int(state.main_index), timeout_seconds, false), state);
+                let main = hold_dns_switch(pending, "main", choose_index("main", state, int(state.main_index), timeout_seconds, false), state, switch_failures);
                 let selections = { bootstrap };
                 if (main.alive)
                     selections.main = main;
@@ -292,7 +300,7 @@ function worker() {
                 next_active = now_seconds() + (applied && !main.alive ? 1 : active_interval);
             }
             else {
-                let main = hold_dns_switch(pending, "main", choose_index("main", state, int(state.main_index), timeout_seconds, false), state);
+                let main = hold_dns_switch(pending, "main", choose_index("main", state, int(state.main_index), timeout_seconds, false), state, switch_failures);
                 if (!main.alive && !all_down.main)
                     log_message("all configured main DNS servers are unavailable", "warn");
                 all_down.main = !main.alive;

@@ -747,6 +747,100 @@ function subscription_node_prefix(section, value) {
     return trim(as_string(prefix));
 }
 
+function excluded_trim(value) {
+    return replace(as_string(value), /^[ \t\r\n]+|[ \t\r\n]+$/g, "");
+}
+
+function exclude_token(value) {
+    let hash = 5381;
+    value = as_string(value);
+    for (let i = 0; i < length(value); i++) {
+        hash = (hash * 33 + ord(substr(value, i, 1))) % 4294967296;
+        if (hash < 0)
+            hash = hash + 4294967296;
+    }
+    return sprintf("%08x", hash);
+}
+
+function json_exclude_key(value) {
+    return "json:" + exclude_token(value);
+}
+
+function excluded_outbound_entries(section) {
+    let raw = as_string(object_or_empty(section).subscription_excluded);
+    if (raw == "")
+        return [];
+    let parsed = null;
+    try {
+        parsed = json(raw);
+    }
+    catch (e) {
+        parsed = null;
+    }
+    if (type(parsed) != "array")
+        return [];
+    let entries = [];
+    let seen = {};
+    for (let item in parsed) {
+        let key = "";
+        let name = "";
+        if (type(item) == "object") {
+            key = excluded_trim(item.key);
+            name = excluded_trim(item.name);
+            if (key == "" && name != "")
+                key = "sub:" + name;
+        }
+        else {
+            name = excluded_trim(item);
+            if (name != "")
+                key = "sub:" + name;
+        }
+        if (key == "" || seen[key])
+            continue;
+        if (name == "" && substr(key, 0, 4) == "sub:")
+            name = substr(key, 4);
+        if (name == "")
+            name = key;
+        seen[key] = true;
+        push(entries, { key, name });
+    }
+    return entries;
+}
+
+function subscription_excluded_names(section) {
+    let names = [];
+    for (let entry in excluded_outbound_entries(section)) {
+        if (substr(entry.key, 0, 4) != "sub:")
+            continue;
+        push(names, substr(entry.key, 4));
+    }
+    return names;
+}
+
+function outbound_key_excluded(section, key) {
+    key = excluded_trim(key);
+    if (key == "")
+        return false;
+    for (let entry in excluded_outbound_entries(section))
+        if (entry.key == key)
+            return true;
+    return false;
+}
+
+function outbound_excluded_signature(section) {
+    let keys = [];
+    for (let entry in excluded_outbound_entries(section))
+        push(keys, entry.key);
+    return join("\n", keys);
+}
+
+function subscription_name_excluded(section, display_name) {
+    display_name = excluded_trim(display_name);
+    if (display_name == "")
+        return false;
+    return outbound_key_excluded(section, "sub:" + display_name);
+}
+
 function subscription_user_agent(section, value) {
     if (subscription_auto_user_agent(section, value))
         return "";
@@ -1124,6 +1218,12 @@ function subscription_download_targets(sections) {
     return result;
 }
 
+function subscription_download_port_offset() {
+    // 4534 and 4535 are the list and component proxies. 4536 is the sing-box
+    // entrance while Xray is the routing plane, so subscription proxies start later.
+    return is_xray_primary() ? 3 : 2;
+}
+
 function subscription_download_target_port(sections, target, base_port) {
     target = as_string(target);
     base_port = int(base_port || 0);
@@ -1131,7 +1231,7 @@ function subscription_download_target_port(sections, target, base_port) {
     let targets = subscription_download_targets(sections);
     for (let i = 0; i < length(targets); i++)
         if (targets[i] == target)
-            return base_port + 2 + i;
+            return base_port + subscription_download_port_offset() + i;
 
     return 0;
 }
@@ -1202,6 +1302,11 @@ return {
     subscription_hide_detour_outbounds,
     subscription_prefix_nodes,
     subscription_node_prefix,
+    subscription_excluded_names,
+    subscription_name_excluded,
+    outbound_key_excluded,
+    outbound_excluded_signature,
+    json_exclude_key,
     subscription_user_agent,
     subscription_hwid,
     subscription_download_section,

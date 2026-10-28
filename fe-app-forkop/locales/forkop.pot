@@ -394,6 +394,9 @@ msgstr ""
 msgid "Certificate path"
 msgstr ""
 
+msgid "DNS server certificate name"
+msgstr ""
+
 #: ../luci-app-forkop/htdocs/luci-static/resources/view/forkop/server.js:1594
 msgid "Certificate pin is unavailable. Apply or restart the server to generate the default certificate, then open this dialog again."
 msgstr ""
@@ -721,6 +724,15 @@ msgstr ""
 
 #: ../luci-app-forkop/htdocs/luci-static/resources/view/forkop/settings.js:197
 msgid "DNS Check Interval"
+msgstr ""
+
+msgid "DNS switch failures"
+msgstr ""
+
+msgid "How many checks in a row must fail before moving to the next DNS server. 1 switches on the first failure."
+msgstr ""
+
+msgid "Enter a whole number from 1 to 10"
 msgstr ""
 
 #: src/forkop/tabs/diagnostic/checks/runDnsCheck.ts:75
@@ -2351,6 +2363,12 @@ msgstr ""
 
 #: ../luci-app-forkop/htdocs/luci-static/resources/view/forkop/section.js:7024
 msgid "Proxy core"
+msgstr ""
+
+msgid "Post-quantum key, X25519MLKEM768"
+msgstr ""
+
+msgid "Needed for REALITY servers on Xray 26.9 and newer: without it, sing-box extended cannot connect to them. On servers before Xray 25.5, turn this off or they stop answering."
 msgstr ""
 
 #: src/forkop/tabs/dashboard/initController.ts:749

@@ -152,6 +152,7 @@ for (const key of ["proxy_core", "dns_type", "dns_server"]) {
 for (const [key, engine] of [
   ["xray_freedom_fragment", "xray"],
   ["dns_check_interval", "sing-box"],
+  ["dns_switch_failures", "sing-box"],
   ["dns_recovery_check_interval", "sing-box"],
   ["dns_check_timeout", "sing-box"],
   ["enable_yacd", "sing-box"],

@@ -698,6 +698,10 @@ br-lan tun0
 0
 [settings.routing_excluded_ips]
 
+[settings.routing_excluded_dns]
+provider
+[settings.routing_engine]
+sing-box
 [settings.route_router_traffic]
 0
 [rule.text_rule.action]
@@ -774,6 +778,10 @@ br-lan tun0
 0
 [settings.routing_excluded_ips]
 
+[settings.routing_excluded_dns]
+provider
+[settings.routing_engine]
+sing-box
 [settings.route_router_traffic]
 0
 [rule.enabled.action]
@@ -814,6 +822,10 @@ br-lan
 0
 [settings.routing_excluded_ips]
 
+[settings.routing_excluded_dns]
+provider
+[settings.routing_engine]
+sing-box
 [settings.route_router_traffic]
 0
 EOF_EXPECTED

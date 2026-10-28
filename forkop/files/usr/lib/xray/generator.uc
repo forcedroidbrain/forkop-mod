@@ -5,6 +5,7 @@ let uci_core = require("core.uci");
 let connections = require("config.connections");
 let parser = require("subscription.parser");
 let runtime_subscription = require("singbox.subscription");
+let subscription_share_link = require("subscription.share_link");
 let runtime_url = require("core.url");
 let xray_constants = require("xray.constants");
 let xray_outbound = require("xray.outbound");
@@ -335,10 +336,13 @@ function add_warp_link(config, taken, section, raw, display_names) {
     return tag;
 }
 
-function add_warp_clients(config, taken, section, tags, display_names) {
+function add_warp_clients(config, taken, section, tags, display_names, exclude_keys) {
     let section_name = as_string(section[".name"]);
     let n = 0;
     for (let client in connections.warp_clients(section)) {
+        let exclude_key = "warp:" + as_string(client[".name"] || "");
+        if (connections.outbound_key_excluded(section, exclude_key))
+            continue;
         n++;
         let private_key = trim(option(client, "private_key", ""));
         let public_key = trim(option(client, "public_key", ""));
@@ -381,27 +385,41 @@ function add_warp_clients(config, taken, section, tags, display_names) {
         taken[tag] = true;
         push(config.outbounds, outbound);
         push(tags, tag);
+        if (type(exclude_keys) == "object")
+            exclude_keys[tag] = exclude_key;
         if (type(display_names) == "object")
             display_names[tag] = label;
     }
 }
 
-function add_manual_links(config, taken, section, tags, display_names) {
+function add_manual_links(config, taken, section, tags, display_names, exclude_keys, copy_links) {
     let section_name = as_string(section[".name"]);
     let links = connections.connection_urls(section);
     for (let i = 0; i < length(links); i++) {
+        let exclude_key = "link:" + as_string(links[i]);
+        if (connections.outbound_key_excluded(section, exclude_key))
+            continue;
         let raw = prepare_share_link(links[i]);
         let scheme = lc(share_link_scheme(raw));
         if (scheme == "warp") {
             let tag = add_warp_link(config, taken, section, raw, display_names);
-            if (tag != "")
+            if (tag != "") {
                 push(tags, tag);
+                if (type(exclude_keys) == "object")
+                    exclude_keys[tag] = exclude_key;
+                if (type(copy_links) == "object")
+                    copy_links[tag] = trim(as_string(links[i]));
+            }
             else
                 warn("xray: invalid WARP link in section '" + section_name + "'\n");
             continue;
         }
         if (scheme == "wireguard" || scheme == "wg" || scheme == "awg" || scheme == "amneziawg" || scheme == "vpn") {
             warn("xray: WireGuard and AmneziaWG links work only in a sing-box section ('" + section_name + "')\n");
+            continue;
+        }
+        if (scheme == "tuic") {
+            warn("xray: TUIC links work only in a sing-box section ('" + section_name + "')\n");
             continue;
         }
         let ir = parser.parse_share_link(raw);
@@ -415,32 +433,50 @@ function add_manual_links(config, taken, section, tags, display_names) {
             warn("xray: Hysteria2 '" + as_string(ir.tag || "") + "' in section '" + section_name + "' uses " + as_string(ir.obfs.type) + " via FinalMask\n");
         let tag_base = as_string(ir.tag || (section_name + "-" + (i + 1)));
         let tag = add_converted(config, taken, ir, tag_base, display_names, ir.tag || ir.remark, section_mux_spec(section));
-        if (tag != "")
+        if (tag != "") {
             push(tags, tag);
+            if (type(exclude_keys) == "object")
+                exclude_keys[tag] = exclude_key;
+            if (type(copy_links) == "object")
+                copy_links[tag] = trim(as_string(links[i]));
+        }
         else
             warn("xray: share-link (", as_string(ir.type || share_link_scheme(raw)), ") in section '", section_name, "' could not be converted to Xray 26 outbound\n");
     }
-    add_warp_clients(config, taken, section, tags, display_names);
+    add_warp_clients(config, taken, section, tags, display_names, exclude_keys);
 }
 
-function add_json_outbounds(config, taken, section, tags, display_names) {
+function add_json_outbounds(config, taken, section, tags, display_names, exclude_keys) {
     let section_name = as_string(section[".name"]);
     let items = connections.outbound_jsons(section);
     for (let i = 0; i < length(items); i++) {
+        let exclude_key = connections.json_exclude_key(items[i]);
+        if (connections.outbound_key_excluded(section, exclude_key))
+            continue;
         let parsed = parse_json_text(items[i]);
         if (type(parsed) != "object") {
             generate_fail("xray JSON outbound is invalid in section " + section_name);
         }
         let tag_base = as_string(parsed.tag || (section_name + "-json-" + (i + 1)));
         let tag = add_converted(config, taken, parsed, tag_base, display_names, parsed.tag, section_mux_spec(section));
-        if (tag != "")
+        if (tag != "") {
             push(tags, tag);
+            if (type(exclude_keys) == "object")
+                exclude_keys[tag] = exclude_key;
+        }
         else
             warn("xray: JSON outbound in section '", section_name, "' is not supported\n");
     }
 }
 
-function add_subscriptions(config, taken, section, tags, display_names) {
+function subscription_copy_link(outbound) {
+    let link = as_string(object_or_empty(outbound).share_link || "");
+    if (!subscription_share_link.is_copyable_link(link))
+        link = subscription_share_link.serialize_outbound_link(outbound);
+    return subscription_share_link.is_copyable_link(link) ? link : "";
+}
+
+function add_subscriptions(config, taken, section, tags, display_names, share_links, exclude_keys) {
     let section_name = as_string(section[".name"]);
     let urls = connections.subscription_urls(section);
     for (let i = 0; i < length(urls); i++) {
@@ -461,9 +497,19 @@ function add_subscriptions(config, taken, section, tags, display_names) {
             let display = as_string(outbound.remark || outbound.tag || "server");
             if (node_prefix != "")
                 display = node_prefix + " " + display;
+            if (connections.subscription_name_excluded(section, display))
+                continue;
             let tag = add_converted(config, taken, outbound, display, display_names, display, section_mux_spec(section));
-            if (tag != "")
+            if (tag != "") {
                 push(tags, tag);
+                if (type(share_links) == "object") {
+                    let link = subscription_copy_link(outbound);
+                    if (link != "")
+                        share_links[tag] = link;
+                }
+                if (type(exclude_keys) == "object")
+                    exclude_keys[tag] = "sub:" + display;
+            }
         }
     }
 }
@@ -484,12 +530,15 @@ function urltest_interval(section) {
     return "3m";
 }
 
-function add_interfaces(config, taken, section, tags, display_names) {
+function add_interfaces(config, taken, section, tags, display_names, exclude_keys) {
     let section_name = as_string(section[".name"]);
     let items = connections.interfaces(section);
     for (let i = 0; i < length(items); i++) {
         let iface = trim(as_string(items[i]));
         if (iface == "")
+            continue;
+        let exclude_key = "iface:" + iface;
+        if (connections.outbound_key_excluded(section, exclude_key))
             continue;
         let tag_base = section_name + "-iface-" + (i + 1);
         let tag = unique_tag(tag_base, taken);
@@ -500,6 +549,8 @@ function add_interfaces(config, taken, section, tags, display_names) {
         taken[tag] = true;
         push(config.outbounds, converted);
         push(tags, tag);
+        if (type(exclude_keys) == "object")
+            exclude_keys[tag] = exclude_key;
         if (type(display_names) == "object")
             display_names[tag] = iface;
     }
@@ -825,11 +876,18 @@ function add_section(config, taken, section, ports, index, xray_sections, connec
     let section_name = as_string(section[".name"]);
     let tags = [];
     let display_names = {};
+    let exclude_keys = {};
 
-    add_manual_links(config, taken, section, tags, display_names);
-    add_subscriptions(config, taken, section, tags, display_names);
-    add_json_outbounds(config, taken, section, tags, display_names);
-    add_interfaces(config, taken, section, tags, display_names);
+    let manual_links = {};
+    add_manual_links(config, taken, section, tags, display_names, exclude_keys, manual_links);
+    let subscription_links = {};
+    let subscription_from = length(tags);
+    add_subscriptions(config, taken, section, tags, display_names, subscription_links, exclude_keys);
+    let subscription_tags = {};
+    for (let i = subscription_from; i < length(tags); i++)
+        subscription_tags[as_string(tags[i])] = true;
+    add_json_outbounds(config, taken, section, tags, display_names, exclude_keys);
+    add_interfaces(config, taken, section, tags, display_names, exclude_keys);
     apply_section_detour(config, taken, section, tags, xray_sections, connection_sections, cascade, deferred);
     let mask = section_finalmask_spec(section);
     if (mask != null) {
@@ -837,8 +895,14 @@ function add_section(config, taken, section, ports, index, xray_sections, connec
             xray_outbound.apply_tcp_finalmask(outbound_by_tag(config, tag), mask);
     }
 
-    if (length(tags) == 0)
-        generate_fail("xray section '" + section_name + "' has no usable outbounds");
+    if (length(tags) == 0) {
+        if (connections.outbound_excluded_signature(section) == "")
+            generate_fail("xray section '" + section_name + "' has no usable outbounds");
+        let tag = unique_tag(section_name + "-excluded", taken);
+        taken[tag] = true;
+        push(config.outbounds, { tag: tag, protocol: "blackhole", settings: {} });
+        push(tags, tag);
+    }
 
     let port = xray_constants.XRAY_SOCKS_PORT_BASE + index;
     push(config.inbounds, socks_inbound(xray_constants.inbound_tag(section_name), port));
@@ -927,7 +991,10 @@ function add_section(config, taken, section, ports, index, xray_sections, connec
             protocol: as_string(object_or_empty(outbound).protocol || ""),
             network: network,
             security: node_stream_security(stream),
-            mask: node_stream_mask(stream)
+            mask: node_stream_mask(stream),
+            source: subscription_tags[tag] ? "subscription" : "",
+            link: subscription_links[tag] || manual_links[tag] || "",
+            excludeKey: exclude_keys[tag] || ""
         });
     }
     nodes_map[section_name] = section_nodes;
@@ -1728,10 +1795,42 @@ function collect_byedpi_real_dns_domains(sections) {
     return domains;
 }
 
+function dns_answer_is_route(section) {
+    return option(section, "action", "") == "dns" && lc(option(section, "dns_answer", "real")) == "route";
+}
+
+function collect_routed_dns_domains(sections) {
+    let blocked = {};
+    let domains = [];
+    for (let section in array_or_empty(sections)) {
+        let action = option(section, "action", "");
+        if (action == "bypass" || (action == "dns" && !dns_answer_is_route(section))) {
+            for (let value in section_domain_matchers(section)) {
+                value = trim(as_string(value));
+                if (value != "")
+                    blocked[value] = true;
+            }
+            continue;
+        }
+        if (!dns_answer_is_route(section))
+            continue;
+        for (let value in section_domain_matchers(section)) {
+            value = trim(as_string(value));
+            if (value == "" || blocked[value])
+                continue;
+            blocked[value] = true;
+            if (fake_dns_domain_usable(value))
+                push_unique(domains, value);
+        }
+    }
+    return domains;
+}
+
 function collect_fake_dns_domains(sections) {
     let domains = [];
     let unmapped = false;
     let claimed = {};
+    let owned_dns = {};
     push_unique(domains, "full:fakeip.podkop.fyi");
     push_unique(domains, "full:ip.podkop.fyi");
     push_unique(domains, "full:use-application-dns.net");
@@ -1741,8 +1840,10 @@ function collect_fake_dns_domains(sections) {
             continue;
         for (let value in section_domain_matchers(section)) {
             value = trim(as_string(value));
-            if (value != "")
-                claimed[value] = true;
+            if (value == "" || owned_dns[value])
+                continue;
+            owned_dns[value] = true;
+            claimed[value] = true;
         }
     }
     for (let section in array_or_empty(sections)) {
@@ -1858,6 +1959,16 @@ function primary_dns_config(sections) {
     let fake = collect_fake_dns_domains(sections);
     let dns_type = option(settings_section(), "dns_type", "udp");
     let servers = [];
+    let routed_domains = collect_routed_dns_domains(sections);
+    if (length(routed_domains) > 0) {
+        push(servers, {
+            address: "fakedns",
+            domains: routed_domains,
+            skipFallback: true,
+            disableCache: true,
+            serveStale: false
+        });
+    }
     for (let server in collect_dns_action_servers(sections))
         push(servers, server);
     let byedpi_domains = collect_byedpi_real_dns_domains(sections);
@@ -2285,6 +2396,70 @@ function apply_router_traffic_route(config) {
     prepend_routing_rule(config, rule);
 }
 
+function excluded_real_dns_wanted() {
+    if (!engine.is_xray_primary())
+        return false;
+    if (lc(option(settings_section(), "routing_excluded_dns", "provider")) != "engine")
+        return false;
+    return length(settings_list("routing_excluded_ips", "")) > 0;
+}
+
+function excluded_real_dns_host() {
+    for (let value in settings_list("dns_server", "77.88.8.8")) {
+        let token = dns_server_token(value);
+        if (match(token, /^[0-9]+(\.[0-9]+){3}$/) != null)
+            return token;
+        let host = trim(as_string(runtime_url.host(token)));
+        if (match(host, /^[0-9]+(\.[0-9]+){3}$/) != null)
+            return host;
+        let pinned = dns_pinned_ip(host != "" ? host : token);
+        if (pinned == "")
+            pinned = dns_pinned_ip(doh_hostname_for(token));
+        if (pinned == "")
+            pinned = dns_pinned_ip(dot_hostname_for(token));
+        if (pinned != "")
+            return pinned;
+    }
+    return "77.88.8.8";
+}
+
+function excluded_real_dns_inbound(tag, listen) {
+    return {
+        tag: tag,
+        listen: listen,
+        port: xray_constants.XRAY_DNS_EXCLUDED_PORT,
+        protocol: "dokodemo-door",
+        settings: {
+            address: excluded_real_dns_host(),
+            port: 53,
+            network: "tcp,udp"
+        }
+    };
+}
+
+// Xray's DNS module always answers through FakeDNS when that server matches the
+// domain, and it cannot skip FakeDNS for one source. Excluded devices are sent
+// to this inbound instead, which forwards the query to the configured resolver.
+function apply_excluded_real_dns(config) {
+    if (!excluded_real_dns_wanted())
+        return;
+    push(config.inbounds, excluded_real_dns_inbound(xray_constants.XRAY_DNS_EXCLUDED_TAG, "0.0.0.0"));
+    push(config.inbounds, excluded_real_dns_inbound(xray_constants.XRAY_DNS_EXCLUDED6_TAG, "::"));
+    let rule = {
+        type: "field",
+        inboundTag: [
+            xray_constants.XRAY_DNS_EXCLUDED_TAG,
+            xray_constants.XRAY_DNS_EXCLUDED6_TAG
+        ]
+    };
+    let target = dns_proxy_target(config);
+    if (target.balancerTag)
+        rule.balancerTag = target.balancerTag;
+    else
+        rule.outboundTag = as_string(target.outboundTag || xray_constants.FREEDOM_TAG);
+    prepend_routing_rule(config, rule);
+}
+
 function apply_dns_client_routes(config) {
     let bootstrap_rule = {
         type: "field",
@@ -2691,6 +2866,8 @@ function generate_config(output_path, ports_path) {
         add_native_policy_outbounds(config, taken);
     if (engine.is_xray_primary())
         apply_dns_client_routes(config);
+    if (engine.is_xray_primary())
+        apply_excluded_real_dns(config);
     if (engine.is_xray_primary())
         apply_router_traffic_route(config);
     if (engine.is_xray_primary())

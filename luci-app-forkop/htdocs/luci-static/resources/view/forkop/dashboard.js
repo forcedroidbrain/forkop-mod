@@ -176,9 +176,13 @@ function renderLocalLists(payload) {
       #cbi-forkop-dashboard-_local_lists > .cbi-value-title {
         display: none;
       }
-      #cbi-forkop-dashboard-_local_lists > .cbi-value-field {
+      #cbi-forkop-dashboard-_local_lists > .cbi-value-field,
+      #cbi-forkop-dashboard-_local_lists > div,
+      #cbi-forkop-dashboard-_local_lists > output {
         margin-left: 0;
         width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
       }
     </style>
     <div class="fkp_dashboard-page__local-lists__header">

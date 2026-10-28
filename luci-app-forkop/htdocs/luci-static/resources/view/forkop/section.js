@@ -1,5 +1,6 @@
 "use strict";
 "require form";
+"require dom";
 "require baseclass";
 "require fs";
 "require network";
@@ -1180,6 +1181,8 @@ const actionProvidersAvailabilityState = {
 };
 let actionProvidersAvailabilityPromise = null;
 let actionProvidersAvailabilityLoader = null;
+let singBoxRealityMlkemAvailable = false;
+let realityMlkemAnchor = null;
 const outboundNameChoicesCache = new Map();
 const outboundNameChoicesInflight = new Map();
 const outboundNameSourceOptions = new Map();
@@ -1237,10 +1240,14 @@ function updateActionProvidersAvailabilityState(nextState) {
     if (typeof nextState.singBoxVersion === "string") {
       singBoxInstalledVersion = nextState.singBoxVersion;
     }
+    singBoxRealityMlkemAvailable = singBoxExtendedRevisionSupportsRealityMlkem(
+      singBoxInstalledVersion,
+    );
     singBoxOpenConnectAvailable =
       Boolean(nextState.singBoxOpenConnect) ||
       singBoxVersionSupportsOpenConnect(nextState.singBoxVersion);
     refreshOpenConnectVisibility();
+    refreshRealityMlkemVisibility();
   }
 
   actionProvidersAvailabilityPromise = null;
@@ -2836,6 +2843,23 @@ let singBoxOpenConnectAvailable = false;
 let singBoxInstalledVersion = "";
 let openConnectAnchor = null;
 
+function singBoxExtendedRevisionSupportsRealityMlkem(version) {
+  const match = `${version || ""}`.match(/extended-(\d+)\.(\d+)\.(\d+)/i);
+  if (!match) {
+    return false;
+  }
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  const patch = Number(match[3]);
+  if (major !== 2) {
+    return major > 2;
+  }
+  if (minor !== 7) {
+    return minor > 7;
+  }
+  return patch >= 2;
+}
+
 function singBoxVersionAtLeast(majorNeed, minorNeed) {
   const match = `${singBoxInstalledVersion || ""}`.match(/(\d+)\.(\d+)/);
   if (!match) {
@@ -2861,6 +2885,23 @@ function refreshOpenConnectVisibility() {
   }
 
   ids.forEach((id) => refreshSectionEngineFields(openConnectAnchor, id));
+}
+
+function refreshRealityMlkemVisibility() {
+  if (!realityMlkemAnchor || !realityMlkemAnchor.section) {
+    return;
+  }
+
+  const ids =
+    typeof realityMlkemAnchor.section.cfgsections === "function"
+      ? realityMlkemAnchor.section.cfgsections()
+      : [];
+  if (!ids.length) {
+    refreshSectionEngineFields(realityMlkemAnchor, "");
+    return;
+  }
+
+  ids.forEach((id) => refreshSectionEngineFields(realityMlkemAnchor, id));
 }
 
 function restrictOpenConnect(option) {
@@ -2940,7 +2981,8 @@ function connectionUrlSchemeUnsupported(value, engine) {
   const wireguard =
     /^(wireguard|wg|awg|amneziawg|vpn):\/\//i.test(text) ||
     /\[interface\]/i.test(text);
-  return settings.isXrayRoutingEngine(engine) && wireguard;
+  const tuic = /^tuic:\/\//i.test(text);
+  return settings.isXrayRoutingEngine(engine) && (wireguard || tuic);
 }
 
 function maskUnsupportedConnectionUrls(root, engine) {
@@ -3046,7 +3088,7 @@ function connectionUrlHint(engine) {
     );
   }
   return _(
-    "vless://, vmess://, ss://, trojan://, socks4/5://, hy2/hysteria2://, wg://, awg://, vpn:// links.",
+    "vless://, vmess://, ss://, trojan://, socks4/5://, hy2/hysteria2://, tuic://, wg://, awg://, vpn:// links.",
   );
 }
 
@@ -10092,6 +10134,38 @@ function createSectionContent(section) {
     });
   };
 
+  o = restrictSectionEngine(
+    section.taboption(
+      "settings",
+      form.Flag,
+      "reality_new_xray",
+      _("Post-quantum key, X25519MLKEM768"),
+      _(
+        "Needed for REALITY servers on Xray 26.9 and newer: without it, sing-box extended cannot connect to them. On servers before Xray 25.5, turn this off or they stop answering.",
+      ),
+    ),
+    "sing-box",
+  );
+  o.default = "0";
+  o.rmempty = true;
+  o.modalonly = true;
+  o.depends("action", "connection");
+  o.depends("action", "proxy");
+  o.depends("action", "outbound");
+  o.depends("action", "vpn");
+  {
+    const previousDepends = o.checkDepends;
+    o.checkDepends = function (section_id) {
+      if (!singBoxRealityMlkemAvailable) {
+        return false;
+      }
+      return typeof previousDepends === "function"
+        ? previousDepends.call(this, section_id)
+        : true;
+    };
+  }
+  realityMlkemAnchor = o;
+
   o = section.taboption(
     "settings",
     form.ListValue,
@@ -10165,7 +10239,7 @@ function createSectionContent(section) {
     "settings",
     form.Value,
     "dns_server_name",
-    _("Certificate name"),
+    _("DNS server certificate name"),
     _(
       "Name on the certificate when the server is a custom IP, for example dns.example.net. A hostname or a preset from the list does not need this.",
     ),
@@ -10185,6 +10259,22 @@ function createSectionContent(section) {
       ? true
       : _("Certificate name must be a domain, for example dns.example.net");
   };
+
+  o = section.taboption(
+    "settings",
+    form.ListValue,
+    "dns_answer",
+    _("DNS answer"),
+    _(
+      "Real address: the device gets the address from this DNS, and the connection bypasses sections below. Through sections below: the device gets a fake address, sections below route the connection, and this DNS is used when the tunnel opens the site.",
+    ),
+  );
+  o.depends("action", "dns");
+  o.value("real", _("Real address"));
+  o.value("route", _("Through sections below"));
+  o.default = "real";
+  o.rmempty = false;
+  o.modalonly = true;
 
   o = section.taboption(
     "settings",
@@ -10349,7 +10439,7 @@ function createSectionContent(section) {
     "selector_proxy_links",
     _("Connection URL"),
     _(
-      "vless://, vmess://, ss://, trojan://, socks4/5://, hy2/hysteria2://, wg://, awg://, vpn:// links.",
+      "vless://, vmess://, ss://, trojan://, socks4/5://, hy2/hysteria2://, tuic://, wg://, awg://, vpn:// links.",
     ),
   );
   o.forkopConnectionUrls = true;
@@ -11935,6 +12025,26 @@ function configureSectionSection(sectionRef, options = {}) {
     cleanupRemovedChildItems(section_id, "urltest", []);
     cleanupRemovedChildItems(section_id, "priority_group", []);
     return handleRemove.apply(this, arguments);
+  };
+
+  sectionRef.handleAdd = function (_ev, name) {
+    const configName = this.uciconfig || this.map.config;
+    const sectionId = this.map.data.add(configName, this.sectiontype, name);
+    const mapNode =
+      typeof this.getPreviousModalMap === "function"
+        ? this.getPreviousModalMap()
+        : null;
+    const prevMap = mapNode ? dom.findClassInstance(mapNode) : this.map;
+    if (prevMap) {
+      prevMap.addedSection = sectionId;
+    }
+
+    return ensureActionProvidersAvailabilityLoaded().then(() => {
+      if (singBoxRealityMlkemAvailable) {
+        uci.set(UCI_PACKAGE, sectionId, "reality_new_xray", "1");
+      }
+      return this.renderMoreOptionsModal(sectionId);
+    });
   };
 
   sectionRef.load = function () {

@@ -224,10 +224,26 @@ function remember_outbound_metadata(state, tag_name, display_name, outbound) {
         state.servers[tag_name] = server;
 }
 
+function remember_exclude_key(state, tag_name, key) {
+    if (type(state) != "object")
+        return;
+    tag_name = as_string(tag_name);
+    key = as_string(key);
+    if (tag_name == "" || key == "")
+        return;
+    if (type(state.excludeKeys) != "object" || state.excludeKeys == null)
+        state.excludeKeys = {};
+    state.excludeKeys[tag_name] = key;
+}
+
 function remember_source_outbound(state, tag_name, display_name, outbound, source_link) {
     if (type(state) != "object")
         return;
     remember_outbound_metadata(state, tag_name, display_name, outbound);
+    remember_exclude_key(state, tag_name, "sub:" + as_string(display_name));
+    if (type(state.subscriptionTags) != "array")
+        state.subscriptionTags = [];
+    push(state.subscriptionTags, tag_name);
     let outbound_type = as_string(outbound.type || "");
     if (outbound_type != "selector" && outbound_type != "urltest") {
         if (subscription_share_link.is_copyable_link(source_link))
@@ -325,6 +341,8 @@ function new_section_state(section_name) {
         version: FORKOP_RUNTIME_CACHE_FORMAT,
         section: section_name,
         links: {},
+        subscriptionTags: [],
+        excludeKeys: {},
         outboundMetadata: {
             names: {},
             countries: {},
@@ -346,6 +364,7 @@ return {
     section_cache_path,
     merge_source_metadata,
     remember_outbound_metadata,
+    remember_exclude_key,
     remember_source_outbound,
     remember_urltest_group,
     remember_urltest_group_config,

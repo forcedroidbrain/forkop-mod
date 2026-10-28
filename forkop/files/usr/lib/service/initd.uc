@@ -444,6 +444,21 @@ function runtime_is_running() {
     return bool_text(runtime_status_object().running);
 }
 
+function core_process_alive() {
+    if (command_success_from_args([ "pidof", "xray" ]) ||
+        command_success_from_args([ "pidof", "Xray" ]))
+        return true;
+    return module_status(LIB_DIR + "/service/state.uc", [ "sing-box-service-running" ]) == 0;
+}
+
+// A new section core or a switched routing engine makes the strict status
+// false before reload runs. The old core is still serving, so reload must run.
+function runtime_reload_candidate() {
+    if (runtime_is_running())
+        return true;
+    return core_process_alive();
+}
+
 function status_service() {
     if (runtime_is_running()) {
         print("running\n");
@@ -892,7 +907,7 @@ function reload_begin_value(reason, owner_pid, runtime_running_value, service_en
         return { action: "run", job_id };
     }
 
-    let running = runtime_running_value == null ? runtime_is_running() : bool_text(runtime_running_value);
+    let running = runtime_running_value == null ? runtime_reload_candidate() : bool_text(runtime_running_value);
     let enabled = service_enabled_value == null ? service_is_enabled() : bool_text(service_enabled_value);
 
     if (initd_should_queue_config_change_reload(reason, CONFIG_CHANGE_REASON, running, active_service_action)) {

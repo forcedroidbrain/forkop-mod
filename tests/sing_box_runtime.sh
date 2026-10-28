@@ -525,6 +525,24 @@ cat >"$WORK_DIR/dns-action-fixture.json" <<JSON
       "action": "connection",
       "outbound_jsons": [ "{\"type\":\"direct\"}" ],
       "domain_suffix": [ "detour.example" ]
+    },
+    {
+      ".name": "dns_route",
+      ".type": "section",
+      "enabled": "1",
+      "action": "dns",
+      "dns_answer": "route",
+      "dns_server": "9.9.9.9",
+      "domain_suffix": [ "route-dns.example" ],
+      "source_ip_cidr": [ "192.0.2.9/32" ]
+    },
+    {
+      ".name": "proxy_after_route",
+      ".type": "section",
+      "enabled": "1",
+      "action": "connection",
+      "outbound_jsons": [ "{\"type\":\"direct\"}" ],
+      "domain_suffix": [ "route-dns.example" ]
     }
   ]
 }
@@ -1430,6 +1448,15 @@ assert(route_rule(dns_action, r => contains(r.source_ip_cidr, "192.0.2.2/32")) =
 let dns_list = json(fs.readfile(dir + "/dns-action.json.rulesets/dns_first-lists-ruleset.json"));
 assert(index(sprintf("%J", dns_list), "list-dns.example") >= 0, "DNS action imports domains from plain lists");
 assert(index(sprintf("%J", dns_list), "198.51.100.0/24") < 0, "DNS action drops subnets from plain lists");
+let route_fake_index = dns_rule_index(dns_action, r => contains(r.domain_suffix, "route-dns.example") && r.server == "fakeip-server");
+let route_real_index = dns_rule_index(dns_action, r => contains(r.domain_suffix, "route-dns.example") && r.server == "dns_route-dns-server");
+assert(route_fake_index >= 0 && route_real_index > route_fake_index, "routed DNS action gives the device a FakeIP before the real resolver");
+let route_resolve = route_rule(dns_action, r => r.action == "resolve" && r.server == "dns_route-dns-server" && contains(r.domain_suffix, "route-dns.example"));
+let route_resolve_index = route_rule_index(dns_action, r => r.action == "resolve" && r.server == "dns_route-dns-server" && contains(r.domain_suffix, "route-dns.example"));
+let route_proxy_index = route_rule_index(dns_action, r => r.outbound == "proxy_after_route-out" && contains(r.domain_suffix, "route-dns.example"));
+assert(route_resolve_index >= 0 && route_proxy_index > route_resolve_index, "routed DNS resolves through its server before a lower section routes the connection");
+assert(route_resolve && route_resolve.disable_cache === true, "routed DNS must not reuse a cached FakeIP");
+assert(contains(dns_rule(dns_action, r => contains(r.domain_suffix, "route-dns.example") && r.server == "fakeip-server").source_ip_cidr, "192.0.2.9/32"), "routed DNS keeps the device filter");
 
 let urltest = cfg("urltest");
 let urltest_out = outbound(urltest, "proxy-urltest-out");

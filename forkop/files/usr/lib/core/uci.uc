@@ -279,7 +279,7 @@ function available() {
     return fixture_enabled() || cursor() != null;
 }
 
-function load(package_name) {
+function load_package(package_name) {
     package_name = as_string(package_name);
     if (fixture_enabled())
         return true;
@@ -298,6 +298,19 @@ function load(package_name) {
     catch (e) {
         return false;
     }
+}
+
+function reload_package(package_name) {
+    package_name = as_string(package_name);
+    if (fixture_enabled())
+        return true;
+
+    // The previous cursor still has the old file. Drop it and read again.
+    // load_package must already be declared: ucode does not see a function
+    // that is defined later in the file.
+    runtime_cursor = false;
+    loaded_packages = {};
+    return load_package(package_name);
 }
 
 function value_to_string(value) {
@@ -325,7 +338,7 @@ function get(path) {
     let c = cursor();
     if (c == null || parts == null || parts.option == "")
         return "";
-    if (!load(parts.package))
+    if (!load_package(parts.package))
         return "";
     parts = resolve_parts(c, parts);
     if (parts == null)
@@ -343,7 +356,7 @@ function get_all(package_name, section_name) {
         return null;
 
     try {
-        load(package_name);
+        load_package(package_name);
         section_name = resolve_section_name(c, package_name, section_name);
         if (section_name == "")
             return null;
@@ -363,7 +376,7 @@ function exists(path) {
     let c = cursor();
     if (c == null || parts == null)
         return false;
-    if (!load(parts.package))
+    if (!load_package(parts.package))
         return false;
     parts = resolve_parts(c, parts);
     if (parts == null)
@@ -383,7 +396,7 @@ function delete_path(path) {
     let c = cursor();
     if (c == null || parts == null)
         return false;
-    if (!load(parts.package))
+    if (!load_package(parts.package))
         return false;
     parts = resolve_parts(c, parts);
     if (parts == null)
@@ -410,7 +423,7 @@ function set_section(path, type_name) {
     let c = cursor();
     if (c == null || parts == null || parts.option != "")
         return false;
-    if (!load(parts.package))
+    if (!load_package(parts.package))
         return false;
     parts = resolve_parts(c, parts);
     if (parts == null)
@@ -434,7 +447,7 @@ function add(package_name, type_name) {
         return "";
 
     try {
-        load(package_name);
+        load_package(package_name);
         let section = c.add(as_string(package_name), as_string(type_name));
         return as_string(section);
     }
@@ -452,7 +465,7 @@ function set(path, value) {
     let c = cursor();
     if (c == null || parts == null || parts.option == "")
         return false;
-    if (!load(parts.package))
+    if (!load_package(parts.package))
         return false;
     parts = resolve_parts(c, parts);
     if (parts == null)
@@ -476,7 +489,7 @@ function add_list(path, value) {
     let c = cursor();
     if (c == null || parts == null || parts.option == "")
         return false;
-    if (!load(parts.package))
+    if (!load_package(parts.package))
         return false;
     parts = resolve_parts(c, parts);
     if (parts == null)
@@ -502,7 +515,7 @@ function del_list(path, value) {
     let c = cursor();
     if (c == null || parts == null || parts.option == "")
         return false;
-    if (!load(parts.package))
+    if (!load_package(parts.package))
         return false;
     parts = resolve_parts(c, parts);
     if (parts == null)
@@ -565,7 +578,7 @@ function sections(package_name, type_name) {
 
     let result = [];
     try {
-        load(package_name);
+        load_package(package_name);
         c.foreach(package_name, as_string(type_name), function(section) {
             let name = section_name(section);
             if (name != "")
@@ -595,7 +608,7 @@ function section_objects(package_name, type_name) {
 
     let result = [];
     try {
-        load(package_name);
+        load_package(package_name);
         c.foreach(package_name, as_string(type_name), function(section) {
             if (type(section) == "object")
                 push(result, section);
@@ -609,7 +622,8 @@ function section_objects(package_name, type_name) {
 
 return {
     available,
-    load,
+    load: load_package,
+    reload_package,
     get,
     get_all,
     exists,

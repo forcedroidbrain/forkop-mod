@@ -128,14 +128,7 @@ function emit_reload_plan(previous, current, context) {
         needs.sing_box_reload = true;
     }
 
-    if (context.force_runtime_reload &&
-        !needs.sing_box_reload &&
-        !needs.nft_rebuild &&
-        !needs.zapret_restart &&
-        !needs.zapret2_restart &&
-        !needs.byedpi_restart &&
-        !needs.dnsmasq_configure &&
-        !needs.dnsmasq_restore)
+    if (context.force_runtime_reload)
         needs.sing_box_reload = true;
 
     let has_work =

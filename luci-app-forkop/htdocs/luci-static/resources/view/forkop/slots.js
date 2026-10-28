@@ -95,7 +95,7 @@ function slotCard(kind, item, active) {
         <div class="fkp-slots__kicker">${escapeHtml(kind === "online" ? _("Online slot") : _("Offline slot"))}</div>
         <h3>${escapeHtml(title)}</h3>
       </div>
-      <span class="fkp-slots__badge ${isActive ? "is-on" : ""}">${escapeHtml(isActive ? _("Slot is active") : _("Slot on standby"))}</span>
+      <span class="fkp-slots__badge ${isActive ? "is-on" : ""}"><span class="fkp-slots__dot ${isActive ? "is-on" : ""}"></span>${escapeHtml(isActive ? _("Slot is active") : _("Slot on standby"))}</span>
     </div>
     <p class="fkp-slots__hint">${escapeHtml(hint)}</p>
     <dl class="fkp-slots__meta">
@@ -185,7 +185,7 @@ function renderSlots(payload) {
       }
       .fkp-slots__card {
         padding: 12px 14px 13px;
-        border-left: 3px solid transparent;
+        border-left: 3px solid var(--fkp-s-line);
       }
       .fkp-slots__card.is-active {
         border-left-color: #337ab7;
@@ -229,6 +229,19 @@ function renderSlots(payload) {
         line-height: 1.4;
         border: 1px solid var(--fkp-s-line);
         white-space: nowrap;
+      }
+      .fkp-slots__badge {
+        color: #6b6b6b;
+        border-color: rgba(127,127,127,.45);
+        background: rgba(127,127,127,.08);
+      }
+      .fkp-slots__badge.is-on {
+        color: var(--fkp-s-primary);
+        border-color: rgba(51,122,183,.45);
+        background: rgba(51,122,183,.12);
+      }
+      .fkp-slots__badge .fkp-slots__dot.is-on {
+        background: var(--fkp-s-primary);
       }
       .fkp-slots__meta {
         display: grid;
@@ -395,7 +408,14 @@ function renderSlots(payload) {
         .fkp-slots__check { margin-top: 4px; }
       }
       #cbi-forkop-slots-_slots_panel > .cbi-value-title { display: none; }
-      #cbi-forkop-slots-_slots_panel > .cbi-value-field { margin-left: 0; width: 100%; }
+      #cbi-forkop-slots-_slots_panel > .cbi-value-field,
+      #cbi-forkop-slots-_slots_panel > div,
+      #cbi-forkop-slots-_slots_panel > output {
+        margin-left: 0;
+        width: 100%;
+        min-width: 0;
+        box-sizing: border-box;
+      }
     </style>
     <p class="fkp-slots__lead">${escapeHtml(_("Save the current Forkop config into a slot. Auto-switch applies the online slot if any host answers and the offline slot only if every host is down."))}</p>
     <div class="fkp-slots__grid">
