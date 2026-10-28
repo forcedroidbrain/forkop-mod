@@ -1441,9 +1441,9 @@ function settings_list(key, fallback) {
 
 function xray_query_strategy() {
     let strategy = lc(option(settings_section(), "dns_strategy", "prefer_ipv4"));
-    if (strategy == "ipv6_only" || strategy == "prefer_ipv6")
+    if (strategy == "ipv6_only")
         return "UseIPv6";
-    if (strategy == "ipv4_only" || strategy == "prefer_ipv4")
+    if (strategy == "ipv4_only")
         return "UseIPv4";
     return "UseIP";
 }

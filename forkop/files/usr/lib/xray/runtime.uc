@@ -133,6 +133,7 @@ function subscription_cache_stamp() {
 
 function config_input_fingerprint() {
     let body = join("\n", [
+        file_content_stamp((getenv("FORKOP_LIB") || "/usr/lib/forkop") + "/xray/generator.uc"),
         file_content_stamp("/etc/config/forkop"),
         file_content_stamp(xray_constants.XRAY_SELECTED_FILE),
         file_content_stamp(xray_constants.ALLOW_DOMAINS_DAT),

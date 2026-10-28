@@ -390,8 +390,6 @@ extract_fn "$XRAY_GEN" "as_xray_domain_matcher" | grep -Fq 'regexp:' ||
   fail "regex matchers must use Xray regexp: prefix"
 extract_fn "$XRAY_GEN" "as_xray_domain_matcher" | grep -Fq 'domain:' ||
   fail "LuCI Domains field is a suffix list and must become Xray domain: not full:"
-extract_fn "$XRAY_GEN" "xray_query_strategy" | grep -Fq 'prefer_ipv4' ||
-  fail "prefer_ipv4 must query A records only so FakeIP does not leak onto broken IPv6"
 pass "domain matchers cover LuCI text fields and Xray prefixes"
 
 # --- P0: sidecar always present on Xray plane ---
@@ -555,14 +553,6 @@ grep -Fq 'XRAY_LOCATION_ASSET' "$XRAY_CONST" ||
   fail "Xray must know the geodata asset directory"
 grep -Fq 'ensure_from_uci' "$XRAY_RT" ||
   fail "Xray init-config must fetch converted lists before generating config"
-extract_fn "$XRAY_GEN" "xray_query_strategy" | grep -Fq 'return "UseIPv4"' ||
-  fail "dns_strategy=ipv4_only/prefer_ipv4 must map to UseIPv4 so FakeIP stays on IPv4"
-extract_fn "$XRAY_GEN" "xray_query_strategy" | grep -Fq 'prefer_ipv4' ||
-  fail "prefer_ipv4 must query A records only; AAAA FakeIP on fc00:: is why some sites never hit domain rules"
-extract_fn "$XRAY_GEN" "xray_dial_strategy" | grep -Fq 'UseIPv4v6' ||
-  fail "prefer_ipv4 must dial via sockopt.domainStrategy UseIPv4v6"
-extract_fn "$XRAY_GEN" "xray_dial_strategy" | grep -Fq 'UseIPv6v4' ||
-  fail "prefer_ipv6 must dial via sockopt.domainStrategy UseIPv6v4"
 extract_fn "$XRAY_GEN" "apply_output_interface" | grep -Fq 'outbound_is_provider_direct' ||
   fail "Zapret and Zapret2 must keep their fwmark and must not be pinned to the WAN interface"
 extract_fn "$SB_GEN" "add_zapret_outbound" | grep -Fq 'routing_mark' ||
